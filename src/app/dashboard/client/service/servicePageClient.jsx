@@ -1,7 +1,6 @@
 
 "use client";
 
-import CTA from "@/components/service/CTA";
 import Invoice from "@/components/service/Invoice";
 import PaymentDetail from "@/components/service/PaymentDetail";
 import PlanCards from "@/components/service/PlanCards";
@@ -98,9 +97,7 @@ export default function ServicePageClient() {
             Manage your subscription, view invoices, and update payment details.
           </p>
           {profile?.subscription_plan && (
-            <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-              Active plan: <strong>{profile.subscription_plan}</strong> · Status:{" "}
-              <strong>{profile.subscription_status}</strong>
+            <div>
               {profile.subscription_status !== "active" && (
                 <span className="ml-2 text-primary/80">
                   (Upgrade to continue submitting projects)
@@ -128,7 +125,7 @@ export default function ServicePageClient() {
         )}
         {activeTab === "payment" && <PaymentDetail profile={profile} />}
 
-        <CTA />
+
       </main>
     </>
   );

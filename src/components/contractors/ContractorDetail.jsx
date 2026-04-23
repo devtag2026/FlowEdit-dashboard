@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Edit, Mail, CheckCircle2, DollarSign } from "lucide-react";
+import { Clock, Edit, CheckCircle2, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PayContractorModal from "@/components/earnings/PayContractorModal";
 import { fetchOnboardingStepsByContractorId } from "@/lib/queries/earnings";
@@ -25,11 +25,11 @@ const ContractorDetail = ({ contractor, onBack, isMobile }) => {
       .catch(console.error);
   }, [contractor?.id]);
 
-  const accessPermissions = [
-    { id: 1, label: "Email",    active: true,  color: "bg-blue-500" },
-    { id: 2, label: "Partner",  active: true,  color: "bg-purple-500" },
-    { id: 3, label: "Frame.io", active: false, color: "bg-gray-300" },
-  ];
+  // const accessPermissions = [
+  //   { id: 1, label: "Email",    active: true,  color: "bg-blue-500" },
+  //   { id: 2, label: "Partner",  active: true,  color: "bg-purple-500" },
+  //   { id: 3, label: "Frame.io", active: false, color: "bg-gray-300" },
+  // ];
 
   // ── Mobile ──────────────────────────────────────────────────────────────────
   if (isMobile) {
@@ -100,7 +100,7 @@ const ContractorDetail = ({ contractor, onBack, isMobile }) => {
             </div>
           </div>
 
-          <div className="bg-tertiary rounded-xl p-3">
+          {/* <div className="bg-tertiary rounded-xl p-3">
             <p className="text-xs font-semibold text-accent uppercase mb-2">Access & Permissions</p>
             <div className="flex gap-2">
               {accessPermissions.map((permission) => (
@@ -113,25 +113,25 @@ const ContractorDetail = ({ contractor, onBack, isMobile }) => {
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
 
-          {/* Contact */}
-          <div className="bg-tertiary rounded-xl p-3">
-            <p className="text-xs font-semibold text-accent uppercase mb-2">Contact</p>
-            <button className="flex items-center gap-2 text-primary hover:text-primary/80 w-full p-2 rounded-lg hover:bg-accent/5 transition-colors">
-              <Mail className="w-4 h-4" />
-              <span className="text-sm font-medium">Message Contractor</span>
-            </button>
+          {/* Payment */}
+          <div className="bg-tertiary rounded-xl p-3 space-y-2">
+            <p className="text-xs font-semibold text-accent uppercase">Payment</p>
+            <p className="text-xs text-accent/60">
+              {contractor.stripeConnected
+                ? "Stripe connected — payouts enabled."
+                : "No Stripe account connected yet."}
+            </p>
+            <Button
+              onClick={() => setPayModalOpen(true)}
+              disabled={!contractor.stripeConnected}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white h-11 rounded-xl gap-2 font-semibold"
+            >
+              <DollarSign className="w-4 h-4" />
+              Pay Contractor
+            </Button>
           </div>
-
-          {/* ── Pay button (mobile) ── */}
-          <Button
-            onClick={() => setPayModalOpen(true)}
-            className="w-full bg-green-600 hover:bg-green-700 text-white h-11 rounded-xl gap-2 font-semibold"
-          >
-            <DollarSign className="w-4 h-4" />
-            Pay Contractor
-          </Button>
         </div>
 
         {payModalOpen && (
@@ -168,14 +168,6 @@ const ContractorDetail = ({ contractor, onBack, isMobile }) => {
             <Badge className={`${contractor.statusColor} border-0 px-4 py-1.5`}>
               {contractor.status}
             </Badge>
-            {/* ── Pay button (desktop) ── */}
-            <Button
-              onClick={() => setPayModalOpen(true)}
-              className="bg-green-600 hover:bg-green-700 text-white gap-2 rounded-xl px-5"
-            >
-              <DollarSign className="w-4 h-4" />
-              Pay Contractor
-            </Button>
           </div>
         </div>
 
@@ -227,30 +219,28 @@ const ContractorDetail = ({ contractor, onBack, isMobile }) => {
           </div>
         </div>
 
-        {/* Access */}
+        {/* Payment */}
         <div className="bg-tertiary rounded-2xl p-6">
-          <h4 className="text-sm font-semibold text-accent/70 uppercase mb-4">Access & Permissions</h4>
-          <div className="flex gap-3">
-            {accessPermissions.map((permission) => (
-              <div
-                key={permission.id}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${permission.active ? "bg-accent/5 text-accent border border-accent/20" : "bg-accent/5 text-accent/40"}`}
-              >
-                <div className={`w-2 h-2 rounded-full ${permission.color}`} />
-                {permission.label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Contact */}
-        <div className="bg-tertiary rounded-2xl p-6">
-          <h4 className="text-sm font-semibold text-accent/70 uppercase mb-4">Contact</h4>
-          <div className="p-4 bg-accent/5 rounded-lg">
-            <button className="flex items-center gap-2 text-primary hover:text-primary/80">
-              <Mail className="w-4 h-4" />
-              <span className="text-sm font-medium">Message Contractor</span>
-            </button>
+          <h4 className="text-sm font-semibold text-accent/70 uppercase mb-4">Payment</h4>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-accent font-medium">
+                {contractor.stripeConnected
+                  ? "Stripe account connected — payouts are enabled."
+                  : "No Stripe account connected yet."}
+              </p>
+              <p className="text-xs text-accent/50 mt-0.5">
+                {contractor.projectsCompleted} project{contractor.projectsCompleted !== 1 ? "s" : ""} completed
+              </p>
+            </div>
+            <Button
+              onClick={() => setPayModalOpen(true)}
+              disabled={!contractor.stripeConnected}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white gap-2 rounded-xl px-5 shrink-0"
+            >
+              <DollarSign className="w-4 h-4" />
+              Pay Contractor
+            </Button>
           </div>
         </div>
       </div>

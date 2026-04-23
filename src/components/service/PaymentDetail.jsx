@@ -53,22 +53,6 @@ const PaymentDetail = ({ profile }) => {
     <>
       {/* Payment Methods */}
       <section className="max-w-5xl mx-auto bg-tertiary rounded-lg md:rounded-3xl p-4 md:p-6 mb-6 text-accent">
-        {profile && (
-          <div className="border border-slate-300 rounded-xl bg-white p-4 mb-5 text-sm text-slate-700 space-y-1 overflow-hidden">
-            <p className="flex gap-2 flex-wrap">
-              <span className="font-semibold shrink-0">Subscription:</span>
-              <span className="break-all">{profile.subscription_plan || "None"}</span>
-            </p>
-            <p className="flex gap-2 flex-wrap">
-              <span className="font-semibold shrink-0">Status:</span>
-              <span>{profile.subscription_status || "none"}</span>
-            </p>
-            <p className="flex gap-2 flex-wrap">
-              <span className="font-semibold shrink-0">Customer ID:</span>
-              <span className="break-all text-xs">{profile.stripe_customer_id || "not set"}</span>
-            </p>
-          </div>
-        )}
 
         <div className="space-y-4">
           <div>
@@ -123,10 +107,10 @@ const PaymentDetail = ({ profile }) => {
             </div>
           )}
 
-          <button className="flex items-center justify-center w-full bg-white text-accent border-2 border-dashed rounded-xl p-4 gap-2 border-slate-300 font-semibold hover:border-primary transition-colors text-sm">
+          {/* <button className="flex items-center justify-center w-full bg-white text-accent border-2 border-dashed rounded-xl p-4 gap-2 border-slate-300 font-semibold hover:border-primary transition-colors text-sm">
             <Plus className="w-4 h-4" />
             Add New Payment Method
-          </button>
+          </button> */}
         </div>
       </section>
 
@@ -139,28 +123,28 @@ const PaymentDetail = ({ profile }) => {
               This address appears on your monthly invoices.
             </p>
           </div>
-          <button
+          {/* <button
             onClick={() => setIsModalOpen(true)}
             className="shrink-0 w-10 h-10 flex items-center justify-center border-2 border-slate-300 rounded-lg text-accent hover:bg-gray-200 transition-colors"
           >
             <Pencil className="w-4 h-4" />
-          </button>
+          </button> */}
         </div>
 
-        <BillingEditModal
+        {/* <BillingEditModal
           isOpen={isModalOpen}
           setIsOpen={setIsModalOpen}
           billing={billing}
           onSave={(updated) => setBilling(updated)}
-        />
+        /> */}
 
         {/* Grid — each cell handles long text with break-words */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:bg-white md:p-6 rounded-2xl">
           {[
             { label: "Company Name",  value: billing.companyName  },
             { label: "Billing Email", value: billing.billingEmail },
-            { label: "Address",       value: billing.address      },
-            { label: "City / State",  value: billing.city         },
+            // { label: "Address",       value: billing.address      },
+            // { label: "City / State",  value: billing.city         },
           ].map(({ label, value }) => (
             <div key={label} className="min-w-0">
               <p className="text-xs md:text-sm text-accent/70 mb-1 font-medium">{label}</p>

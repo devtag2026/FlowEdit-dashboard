@@ -323,7 +323,7 @@ export default function DashboardLayout({ children }) {
                 </button>
               </Link>
 
-              <Link href={`/dashboard/${role}/profile`}>
+              {/* <Link href={`/dashboard/${role}/profile`}> */}
                 <div className="relative flex items-center gap-2 px-1 py-1 lg:px-3 lg:py-2 rounded-full lg:rounded-full bg-tertiary hover:border-purple-400/70 hover:shadow-[0_0_20px_-5px_rgba(168,85,247,0.7)] transition-all duration-300 active:scale-95">
                   <div className="relative w-8 h-8 lg:w-10 lg:h-10 rounded-full overflow-hidden bg-linear-to-br from-purple-600 to-purple-400 shrink-0">
                     {userProfile?.avatar_url ? (
@@ -344,7 +344,7 @@ export default function DashboardLayout({ children }) {
                     {userProfile?.name || "User"}
                   </span>
                 </div>
-              </Link>
+              {/* </Link> */}
             </div>
           </div>
         </header>

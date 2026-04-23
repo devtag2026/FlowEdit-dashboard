@@ -9,7 +9,7 @@ export async function fetchContractors() {
       `
       id, name, email, avatar_url,
       stripe_connect_id, created_at,
-      assigned:projects!contractor_id(id, status, updated_at)
+      assigned:projects!contractor_id(id, status, created_at, updated_at)
     `
     )
     .eq('role', 'contractor')
@@ -42,6 +42,22 @@ export async function fetchContractors() {
     if (active > 0) status = 'Active'
     else if (completed > 0) status = 'Inactive'
 
+    const completedProjects = projects.filter(p =>
+      ['completed', 'ready_to_post', 'posted'].includes(p.status)
+    )
+    const avgDeliveryDays =
+      completedProjects.length > 0
+        ? Math.round(
+            completedProjects.reduce((sum, p) => {
+              const days =
+                (new Date(p.updated_at) - new Date(p.created_at)) /
+                (1000 * 60 * 60 * 24)
+              return sum + Math.max(0, days)
+            }, 0) / completedProjects.length
+          )
+        : null
+    const avgDeliveryTime = avgDeliveryDays !== null ? `${avgDeliveryDays}d` : null
+
     return {
       id: c.id,
       name: c.name || 'Unknown',
@@ -58,6 +74,7 @@ export async function fetchContractors() {
       projectsCompleted: completed,
       totalProjects: projects.length,
       lastActivity,
+      avgDeliveryTime,
       stripeConnected: !!c.stripe_connect_id,
       memberSince: c.created_at,
     }

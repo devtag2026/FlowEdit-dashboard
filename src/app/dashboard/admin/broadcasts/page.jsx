@@ -4,7 +4,7 @@ import EmptyBroadcastDetail from "@/components/broadcasts/EmptyBroadcast";
 import BroadcastDetail from "@/components/broadcasts/BroadcastsDetail";
 import { createBroadcast } from "@/lib/queries/broadcast";
 import { useBroadcasts } from "@/hooks/admin/useBroadcast";
-import { Plus, Search, Eye, ChevronUp } from "lucide-react";
+import { Plus, Search, Eye, ChevronUp, Megaphone, BarChart2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,16 @@ export default function BroadcastsPage() {
     }
   };
 
+  const totalViews = broadcasts.reduce((sum, b) => sum + (b.views ?? 0), 0);
+  const readRate =
+    broadcasts.length > 0
+      ? Math.round(
+          (broadcasts.filter((b) => (b.views ?? 0) > 0).length /
+            broadcasts.length) *
+            100
+        )
+      : 0;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-secondary flex items-center justify-center">
@@ -83,6 +93,40 @@ export default function BroadcastsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-accent">
             Broadcasts
           </h1>
+          <p className="text-sm text-accent/60 mt-1">
+            Send announcements and updates to your users
+          </p>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-tertiary rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Megaphone className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-accent/60 font-medium uppercase">Total Broadcasts</p>
+              <p className="text-2xl font-bold text-accent">{broadcasts.length}</p>
+            </div>
+          </div>
+          <div className="bg-tertiary rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+              <Eye className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-accent/60 font-medium uppercase">Total Views</p>
+              <p className="text-2xl font-bold text-accent">{totalViews}</p>
+            </div>
+          </div>
+          <div className="bg-tertiary rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+              <BarChart2 className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs text-accent/60 font-medium uppercase">Engagement Rate</p>
+              <p className="text-2xl font-bold text-accent">{readRate}%</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -153,7 +197,7 @@ export default function BroadcastsPage() {
               {/* Sent */}
               <div>
                 <h3 className="text-xs font-semibold text-accent/60 uppercase mb-3">
-                  Sent
+                  Sent ({sentBroadcasts.length})
                 </h3>
                 <div className="space-y-3">
                   {sentBroadcasts.length > 0 ? (
@@ -161,47 +205,41 @@ export default function BroadcastsPage() {
                       <div
                         key={broadcast.id}
                         onClick={() => handleBroadcastSelect(broadcast)}
-                        className={`bg-tertiary rounded-2xl p-3 sm:p-4 cursor-pointer transition-all hover:shadow-md min-w-0 ${
+                        className={`bg-secondary rounded-2xl p-3 sm:p-4 cursor-pointer transition-all hover:shadow-md min-w-0 border border-transparent ${
                           selectedBroadcast?.id === broadcast.id
-                            ? "ring-2 ring-primary"
-                            : ""
+                            ? "ring-2 ring-primary border-primary/20"
+                            : "hover:border-accent/10"
                         }`}
                       >
-                        <h4
-                          className="font-semibold text-accent mb-2 truncate text-sm sm:text-base"
-                          title={broadcast.title}
-                        >
-                          {broadcast.title}
-                        </h4>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4
+                            className="font-semibold text-accent truncate text-sm sm:text-base flex-1"
+                            title={broadcast.title}
+                          >
+                            {broadcast.title}
+                          </h4>
+                          <span className="text-xs text-accent/50 shrink-0 pt-0.5">
+                            {broadcast.sentAt}
+                          </span>
+                        </div>
                         <div className="flex flex-wrap gap-1.5 mb-2">
                           <Badge
                             className={`${broadcast.audienceColor} border-0 text-xs shrink-0`}
                           >
                             {broadcast.audience}
                           </Badge>
-                          <Badge
-                            className={`${broadcast.priorityColor} border-0 text-xs shrink-0`}
-                          >
-                            {broadcast.priority}
-                          </Badge>
                         </div>
-                        {/* Meta row — wraps on small screens */}
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-accent/60">
-                          <span className="flex items-center gap-1 shrink-0">
-                            <Eye className="w-3 h-3" />
-                            {broadcast.views} seen
-                          </span>
-                          <span className="shrink-0">•</span>
-                          <span className="shrink-0">
-                            Sent {broadcast.sentAt}
-                          </span>
+                        <div className="flex items-center gap-1.5 text-xs text-accent/60">
+                          <Eye className="w-3 h-3" />
+                          <span>{broadcast.views} seen</span>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-accent/40 text-center py-4">
-                      No sent broadcasts
-                    </p>
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <Megaphone className="w-6 h-6 text-accent/20 mb-2" />
+                      <p className="text-sm text-accent/40">No sent broadcasts</p>
+                    </div>
                   )}
                 </div>
               </div>

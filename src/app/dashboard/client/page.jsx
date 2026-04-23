@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Eye } from "lucide-react";
+import { Plus, Search, Eye, Lock } from "lucide-react";
 import { Activity, Clock, CheckCircle } from "lucide-react";
 import StatCard from "@/components/Dashboard/StatCard";
 import { Input } from "@/components/ui/input";
@@ -164,19 +164,28 @@ const Dashboard = () => {
                 Track your videos, revisions and progress
               </p>
             </div>
-            <div className="relative">
-              <Button
-                onClick={() => setIsProjectModalOpen(true)}
-                disabled={!canSubmitProject}
-                className="flex items-center justify-center gap-2 w-auto sm:w-auto bg-primary text-white px-7 sm:px-6 h-10 sm:h-11 rounded-xl text-sm sm:text-base font-semibold font-onest disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-                New Project
-              </Button>
-              {!canSubmitProject && (
-                <p className="text-xs text-danger mt-1 text-right">
-                  You need an active subscription to submit projects.
-                </p>
+            <div className="flex flex-col items-end gap-1.5">
+              {canSubmitProject ? (
+                <Button
+                  onClick={() => setIsProjectModalOpen(true)}
+                  className="flex items-center justify-center gap-2 w-auto bg-primary text-white px-7 sm:px-6 h-10 sm:h-11 rounded-xl text-sm sm:text-base font-semibold font-onest"
+                >
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                  New Project
+                </Button>
+              ) : (
+                <div className="flex flex-col items-end gap-1.5">
+                  <Button
+                    onClick={() => router.push("/dashboard/client/service")}
+                    className="flex items-center justify-center gap-2 w-auto bg-amber-500 hover:bg-amber-600 text-white px-7 sm:px-6 h-10 sm:h-11 rounded-xl text-sm sm:text-base font-semibold font-onest"
+                  >
+                    <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Upgrade Plan
+                  </Button>
+                  <p className="text-xs text-accent/60 text-right max-w-[220px]">
+                    An active subscription is required to submit projects.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -352,7 +361,9 @@ const Dashboard = () => {
               <div className="bg-tertiary rounded-2xl p-12 text-center">
                 <p className="text-accent/60">
                   {projects.length === 0
-                    ? "No projects yet. Click \"New Project\" to get started."
+                    ? canSubmitProject
+                      ? "No projects yet. Click \"New Project\" to get started."
+                      : "No projects yet. Upgrade your plan to submit your first project."
                     : "No projects found matching your criteria."}
                 </p>
               </div>

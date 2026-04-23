@@ -377,7 +377,7 @@ export async function fetchUserProfile() {
         const result = await res.json();
 
         if (result.merged && result.data) {
-          console.log("[fetchUserProfile] subscription merged from pending");
+         
           return { ...profileById, ...result.data, auth_id: user.id };
         }
       } catch (err) {

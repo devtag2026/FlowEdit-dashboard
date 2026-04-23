@@ -48,23 +48,7 @@ export default function LoginClient() {
           <p className="text-accent/60 mt-2">Sign in to your dashboard</p>
         </div>
 
-        {/* ── Payment success banner ── */}
-        {paid && (
-          <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200 flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-green-700 text-sm">
-                Payment successful!
-                {plan && planLabels[plan]
-                  ? ` Welcome to the ${planLabels[plan]} plan.`
-                  : ""}
-              </p>
-              <p className="text-green-600 text-xs mt-0.5">
-                Sign in with Google to access your account. Your subscription is ready.
-              </p>
-            </div>
-          </div>
-        )}
+    
 
         {/* ── Auth error from callback ── */}
         {authError && (

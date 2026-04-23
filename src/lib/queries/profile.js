@@ -11,7 +11,7 @@ export async function fetchProfile() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, name, email, phone, avatar_url, address, city")
+    .select("id, name, email, phone, avatar_url, address, city, notification_preferences, created_at")
     .eq("id", user.id)
     .single();
 
@@ -19,7 +19,7 @@ export async function fetchProfile() {
   return data;
 }
 
-export async function updateProfile({ name, phone, address, city }) {
+export async function updateProfile({ name, phone, address, city, notification_preferences }) {
   const {
     data: { user },
     error: authError,
@@ -31,12 +31,13 @@ export async function updateProfile({ name, phone, address, city }) {
   if (phone !== undefined) payload.phone = phone;
   if (address !== undefined) payload.address = address;
   if (city !== undefined) payload.city = city;
+  if (notification_preferences !== undefined) payload.notification_preferences = notification_preferences;
 
   const { data, error } = await supabase
     .from("profiles")
     .update(payload)
     .eq("id", user.id)
-    .select("id, name, email, phone, avatar_url, address, city")
+    .select("id, name, email, phone, avatar_url, address, city, notification_preferences, created_at")
     .single();
 
   if (error) throw error;
