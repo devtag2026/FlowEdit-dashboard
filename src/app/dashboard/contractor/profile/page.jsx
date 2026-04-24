@@ -1,285 +1,485 @@
 "use client";
-import React, { useState } from "react";
+
+import React, { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { SettingsInput } from "@/components/Settings/SettingsInput";
-import { SettingsToggle } from "@/components/Settings/SettingsToggle";
-import { SettingsSection } from "@/components/Settings/SettingsSection";
-import Image from "next/image";
-import { NotebookPenIcon } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Loader2,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Bell,
+  User,
+  Phone,
+  BellOff,
+  FolderCheck,
+  Clock,
+  DollarSign,
+  ListChecks,
+} from "lucide-react";
+import {
+  fetchProfile,
+  updateProfile,
+} from "@/lib/queries/profile";
+import { fetchContractorProjects } from "@/lib/queries/projects";
+import { fetchEarningsSummary, formatCurrency, fetchOnboardingSteps } from "@/lib/queries/earnings";
 
-export default function AccountSettings() {
+const DEFAULT_NOTIF = {
+  projectAssigned: true,
+  revisionRequests: true,
+  paymentReceived: true,
+  emailNotifications: true,
+  browserNotifications: false,
+};
+
+const NOTIF_OPTIONS = [
+  {
+    key: "projectAssigned",
+    label: "Project Assignments",
+    description: "Get notified when a new project is assigned to you.",
+  },
+  {
+    key: "revisionRequests",
+    label: "Revision Requests",
+    description: "Get notified when a client or admin requests a revision.",
+  },
+  {
+    key: "paymentReceived",
+    label: "Payment Received",
+    description: "Get notified when a payment is made to your account.",
+  },
+  {
+    key: "emailNotifications",
+    label: "Email Notifications",
+    description: "Receive email updates about your work and payments.",
+  },
+  {
+    key: "browserNotifications",
+    label: "Browser Notifications",
+    description: "Show push notifications in your browser for important events.",
+    requiresPermission: true,
+  },
+];
+
+function formatMemberSince(dateStr) {
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+async function requestBrowserPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const result = await Notification.requestPermission();
+  return result === "granted";
+}
+
+function showBrowserNotification(title, body) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  new Notification(title, { body, icon: "/favicon.ico" });
+}
+
+const InlineFeedback = ({ msg }) => {
+  if (!msg) return null;
+  const ok = msg.type === "success";
+  return (
+    <p className={`flex items-center gap-1.5 text-xs mt-1.5 ${ok ? "text-green-600" : "text-red-500"}`}>
+      {ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+      {msg.text}
+    </p>
+  );
+};
+
+// Onboarding progress bar
+function OnboardingProgress({ steps }) {
+  if (!steps || steps.length === 0) return null;
+  const completed = steps.filter((s) => s.completed).length;
+  const pct = Math.round((completed / steps.length) * 100);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-accent/60 font-medium">Onboarding</span>
+        <span className="font-bold text-accent">{pct}%</span>
+      </div>
+      <div className="h-1.5 bg-accent/10 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary rounded-full transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-accent/45">{completed} of {steps.length} steps complete</p>
+    </div>
+  );
+}
+
+export default function ContractorAccountSettings() {
+  const [profile, setProfile]               = useState(null);
+  const [projects, setProjects]             = useState([]);
+  const [earnings, setEarnings]             = useState(null);
+  const [onboarding, setOnboarding]         = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [avatarUrl, setAvatarUrl]           = useState(null);
+  const [profileSaving, setProfileSaving]   = useState(false);
+  const [profileMsg, setProfileMsg]         = useState(null);
+  const [notifications, setNotifications]   = useState(DEFAULT_NOTIF);
+  const [savingKey, setSavingKey]           = useState(null);
+  const [notifMsgs, setNotifMsgs]           = useState({});
+  const [browserPermission, setBrowserPermission] = useState("default");
+  const [avatarImgError, setAvatarImgError] = useState(false);
+
   const {
-    register: registerProfile,
-    handleSubmit: handleSubmitProfile,
-    formState: { errors: profileErrors },
-  } = useForm({
-    defaultValues: {
-      name: "John Doe",
-      email: "john.doe@example.com",
-      phone: "+1 234 567 8900",
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isDirty },
+  } = useForm({ defaultValues: { name: "", phone: "" } });
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const profileData = await fetchProfile();
+      setProfile(profileData);
+      setAvatarUrl(profileData.avatar_url || null);
+      setAvatarImgError(false);
+      reset({ name: profileData.name || "", phone: profileData.phone || "" });
+      if (profileData.notification_preferences) {
+        setNotifications({ ...DEFAULT_NOTIF, ...profileData.notification_preferences });
+      }
+
+      // Load contractor-specific data in parallel
+      const [projs, earningsSummary, steps] = await Promise.all([
+        fetchContractorProjects(profileData.id),
+        fetchEarningsSummary().catch(() => null),
+        fetchOnboardingSteps().catch(() => []),
+      ]);
+      setProjects(projs || []);
+      setEarnings(earningsSummary);
+      setOnboarding(steps || []);
+    } catch (err) {
+      console.error("Failed to load contractor profile:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    load();
+    if (!("Notification" in window)) {
+      setBrowserPermission("unsupported");
+    } else {
+      setBrowserPermission(Notification.permission);
+    }
+  }, [load]);
+
+  const onSubmitProfile = async (data) => {
+    try {
+      setProfileSaving(true);
+      setProfileMsg(null);
+      const updated = await updateProfile({ name: data.name.trim(), phone: data.phone.trim() });
+      setProfile((prev) => ({ ...prev, ...updated }));
+      reset({ name: updated.name || "", phone: updated.phone || "" });
+      setProfileMsg({ type: "success", text: "Profile saved successfully." });
+      setTimeout(() => setProfileMsg(null), 3000);
+    } catch (err) {
+      setProfileMsg({ type: "error", text: err.message || "Failed to save." });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleToggle = async (key, checked) => {
+    if (key === "browserNotifications") {
+      if (checked) {
+        if (browserPermission === "unsupported") {
+          setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: "Not supported in this browser." } }));
+          setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 3000);
+          return;
+        }
+        if (browserPermission === "denied") {
+          setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: "Blocked — enable in browser site settings." } }));
+          setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 5000);
+          return;
+        }
+        const granted = await requestBrowserPermission();
+        setBrowserPermission(granted ? "granted" : "denied");
+        if (!granted) {
+          setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: "Permission denied." } }));
+          setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 5000);
+          return;
+        }
+        showBrowserNotification("Notifications enabled", "You'll now receive contractor notifications from FlowEdit.");
+      }
+    }
+
+    const next = { ...notifications, [key]: checked };
+    setNotifications(next);
+    try {
+      setSavingKey(key);
+      await updateProfile({ notification_preferences: next });
+      setNotifMsgs((p) => ({ ...p, [key]: { type: "success", text: "Saved" } }));
+    } catch (err) {
+      setNotifications((p) => ({ ...p, [key]: !checked }));
+      const msg = err?.message?.includes("notification_preferences")
+        ? "Column missing — run the SQL migration in Supabase."
+        : "Failed to save.";
+      setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: msg } }));
+    } finally {
+      setSavingKey(null);
+      setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 3000);
+    }
+  };
+
+  const activeCount    = projects.filter((p) => ["submitted", "in_progress", "review"].includes(p.status)).length;
+  const completedCount = projects.filter((p) => ["completed", "ready_to_post", "posted"].includes(p.status)).length;
+
+  const stats = [
+    {
+      icon: FolderCheck,
+      label: "Completed",
+      value: completedCount,
     },
-  });
-
-  const {
-    register: registerSecurity,
-    handleSubmit: handleSubmitSecurity,
-    formState: { errors: securityErrors },
-    watch,
-    reset: resetSecurity,
-  } = useForm({
-    defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
+    {
+      icon: Clock,
+      label: "Active",
+      value: activeCount,
     },
-  });
+    {
+      icon: DollarSign,
+      label: "This Month",
+      value: earnings ? formatCurrency(earnings.thisMonth, earnings.currency) : "—",
+    },
+    {
+      icon: ListChecks,
+      label: "Year to Date",
+      value: earnings ? formatCurrency(earnings.yearToDate, earnings.currency) : "—",
+    },
+  ];
 
-  const [notifications, setNotifications] = useState({
-    projectUpdates: true,
-    emailNotifications: true,
-    browserNotifications: false,
-    weeklyDigest: true,
-  });
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-secondary flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
-  const onSubmitProfile = (data) => {
-    console.log("Profile Data:", data);
-    alert("Profile updated successfully!");
-  };
-
-  const onSubmitSecurity = (data) => {
-    console.log("Security Data:", data);
-    alert("Password updated successfully!");
-    resetSecurity();
-  };
-
-  const handleSaveNotifications = () => {
-    console.log("Notifications:", notifications);
-    alert("Notification preferences saved!");
-  };
+  const memberSince = formatMemberSince(profile?.created_at);
 
   return (
     <div className="min-h-screen bg-secondary p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-accent mb-2">
-            Account Settings
-          </h1>
-          <p className="text-accent/70">
-            Manage your profile and account preferences.
-          </p>
+
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent">Account Settings</h1>
+          <p className="text-sm text-accent/60 mt-1">Manage your profile, contact details, and notification preferences.</p>
         </div>
 
-        <SettingsSection
-          title="Profile"
-          description="Update your profile and personal details."
-        >
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 mb-6">
-            <div className="relative shrink-0">
-              <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-full bg-linear-to from-primary to-secondary overflow-hidden">
-                <Image
-                  width={200}
-                  height={200}
-                  src="https://images.pexels.com/photos/712513/pexels-photo-712513.jpeg"
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          {/* Sidebar */}
+          <div className="lg:col-span-4 space-y-4">
+
+            {/* Profile card */}
+            <div className="bg-tertiary rounded-3xl p-6 flex flex-col items-center text-center space-y-4">
+              <div className="w-24 h-24 rounded-full overflow-hidden bg-accent/10 flex items-center justify-center ring-4 ring-white shadow-lg">
+                {avatarUrl && !avatarImgError ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="Profile photo" className="w-full h-full object-cover" onError={() => setAvatarImgError(true)} />
+                ) : (
+                  <span className="text-3xl font-bold text-accent/40 select-none">
+                    {profile?.name?.[0]?.toUpperCase() || "C"}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-0.5 w-full">
+                <h2 className="text-xl font-bold text-accent truncate">{profile?.name || "—"}</h2>
+                <p className="text-sm text-accent/55 truncate">{profile?.email || "—"}</p>
+              </div>
+
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary">
+                Contractor
+              </span>
+
+              <p className="text-xs text-accent/40">
+                Member since{" "}
+                <span className="font-medium text-accent/60">{memberSince || "—"}</span>
+              </p>
+            </div>
+
+            {/* Stats */}
+            <div className="bg-tertiary rounded-3xl p-5">
+              <h3 className="text-xs font-semibold text-accent/50 uppercase mb-3">My Activity</h3>
+              <div className="space-y-1">
+                {stats.map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="flex items-center justify-between py-2.5 border-b border-accent/8 last:border-0">
+                    <div className="flex items-center gap-2.5 text-sm text-accent/65">
+                      <Icon className="w-4 h-4 text-accent/35" />
+                      {label}
+                    </div>
+                    <span className="text-sm font-bold text-accent">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="flex flex-col items-center lg:items-start flex-1 text-center lg:text-left">
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="border-accent/20 text-accent hover:bg-primary/5 text-md font-onest shadow-accent/40 shadow-lg w-full sm:w-auto"
-                >
-                  Upload new photo
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-danger font-onest font-medium hover:text-danger hover:bg-accent text-md w-8 sm:w-auto"
-                >
-                  Remove
-                </Button>
+            {/* Onboarding progress */}
+            {onboarding.length > 0 && (
+              <div className="bg-tertiary rounded-3xl p-5">
+                <OnboardingProgress steps={onboarding} />
               </div>
+            )}
 
-              <p className="text-xs sm:text-sm font-onest text-accent/60 pt-4 max-w-md">
-                Recommended: Square JPG, PNG, or GIF, at least 1000x1000 pixels.
+            <div className="flex items-start gap-3 bg-primary/5 border border-primary/15 rounded-2xl px-4 py-3.5">
+              <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <p className="text-xs text-accent/70 leading-relaxed">
+                Signed in via <strong>Google OAuth</strong>. Your email is managed by Google and cannot be changed here.
               </p>
             </div>
           </div>
-        </SettingsSection>
 
-        <form onSubmit={handleSubmitProfile(onSubmitProfile)}>
-          <SettingsSection
-            title="User Information"
-            description="Update your name and personal details."
-          >
-            <div className="space-y-4">
-              <SettingsInput
-                label="Full Name"
-                placeholder="Enter your full name"
-                register={registerProfile("name", {
-                  required: "Name is required",
-                  minLength: {
-                    value: 2,
-                    message: "Name must be at least 2 characters",
-                  },
-                })}
-                error={profileErrors.name}
-              />
-              <SettingsInput
-                label="Email Address"
-                type="email"
-                placeholder="your.email@example.com"
-                register={registerProfile("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: "Invalid email address",
-                  },
-                })}
-                error={profileErrors.email}
-              />
-              <SettingsInput
-                label="Phone"
-                type="tel"
-                placeholder="+1 234 567 8900"
-                register={registerProfile("phone", {
-                  required: "Phone is required",
-                  pattern: {
-                    value:
-                      /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/,
-                    message: "Invalid phone number",
-                  },
-                })}
-                error={profileErrors.phone}
-              />
+          {/* Main column */}
+          <div className="lg:col-span-8 space-y-6">
+
+            {/* Personal info */}
+            <div className="bg-tertiary rounded-3xl p-6">
+              <div className="mb-5">
+                <h3 className="text-lg font-semibold text-accent">Personal Information</h3>
+                <p className="text-sm text-accent/55">Update your display name and phone number.</p>
+              </div>
+
+              <form onSubmit={handleSubmit(onSubmitProfile)} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-accent flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-accent/45" />
+                    Full Name
+                  </Label>
+                  <Input
+                    placeholder="Enter your full name"
+                    {...register("name", {
+                      required: "Name is required",
+                      minLength: { value: 2, message: "At least 2 characters required" },
+                    })}
+                    className={`bg-white border-accent/20 text-accent placeholder:text-accent/30 focus:border-primary focus-visible:ring-0 h-11 ${errors.name ? "border-red-400" : ""}`}
+                  />
+                  {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-accent">Email Address</Label>
+                  <div className="flex items-center gap-2 h-11 px-3 rounded-lg border border-accent/15 bg-accent/5">
+                    <span className="text-sm text-accent/55 flex-1 truncate">{profile?.email || "—"}</span>
+                    <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-semibold shrink-0">
+                      Google OAuth
+                    </span>
+                  </div>
+                  <p className="text-xs text-accent/40">Managed by your Google account — cannot be edited here.</p>
+                </div>
+
+                {/* <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-accent flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-accent/45" />
+                    Phone Number
+                  </Label>
+                  <Input
+                    type="tel"
+                    placeholder="+1 234 567 8900"
+                    {...register("phone", {
+                      pattern: {
+                        value: /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/,
+                        message: "Invalid phone number",
+                      },
+                    })}
+                    className={`bg-white border-accent/20 text-accent placeholder:text-accent/30 focus:border-primary focus-visible:ring-0 h-11 ${errors.phone ? "border-red-400" : ""}`}
+                  />
+                  {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
+                </div> */}
+
+                <InlineFeedback msg={profileMsg} />
+
+                <div className="flex items-center justify-between pt-3 border-t border-accent/10">
+                  <p className="text-xs text-accent/40">
+                    {isDirty ? "You have unsaved changes." : "No pending changes."}
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={profileSaving || !isDirty}
+                    className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 h-10 disabled:opacity-50 gap-2"
+                  >
+                    {profileSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : "Save Changes"}
+                  </Button>
+                </div>
+              </form>
             </div>
 
-            <div className="flex gap-3 justify-start pt-6 mt-6 border-t border-accent/10">
-              <Button
-                type="submit"
-                className="hover:bg-primary bg-slate-700/10 text-accent hover:text-tertiary duration-500"
-              >
-                Save Profile
-              </Button>
-            </div>
-          </SettingsSection>
-        </form>
+            {/* Notifications */}
+            <div className="bg-tertiary rounded-3xl p-6">
+              <div className="mb-5 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Bell className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-accent">Notification Preferences</h3>
+                  <p className="text-sm text-accent/55">Each toggle saves instantly to your account.</p>
+                </div>
+              </div>
 
-        <form onSubmit={handleSubmitSecurity(onSubmitSecurity)}>
-          <SettingsSection
-            title="Security"
-            description="Manage your password and security settings."
-          >
-            <div className="space-y-4">
-              <SettingsInput
-                label="Current Password"
-                type="password"
-                placeholder="Enter current password"
-                register={registerSecurity("currentPassword", {
-                  required: "Current password is required",
+              <div className="divide-y divide-accent/8">
+                {NOTIF_OPTIONS.map(({ key, label, description }) => {
+                  const isDisabled  = savingKey === key;
+                  const isBrowser   = key === "browserNotifications";
+                  const blocked     = isBrowser && browserPermission === "denied";
+                  const unsupported = isBrowser && browserPermission === "unsupported";
+
+                  return (
+                    <div key={key} className="flex items-start justify-between gap-4 py-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-accent">{label}</p>
+                          {blocked && (
+                            <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                              <BellOff className="w-3 h-3" /> Blocked
+                            </span>
+                          )}
+                          {unsupported && (
+                            <span className="text-xs text-accent/40 bg-accent/8 px-2 py-0.5 rounded-full">Not supported</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-accent/50 mt-0.5">{description}</p>
+                        {blocked && (
+                          <p className="text-xs text-amber-600 mt-1">Enable notifications in your browser&apos;s site settings.</p>
+                        )}
+                        {notifMsgs[key] && (
+                          <p className={`text-xs mt-1.5 flex items-center gap-1 ${notifMsgs[key].type === "success" ? "text-green-600" : "text-red-500"}`}>
+                            {notifMsgs[key].type === "success"
+                              ? <CheckCircle2 className="w-3 h-3" />
+                              : <AlertCircle className="w-3 h-3" />}
+                            {notifMsgs[key].text}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                        {isDisabled && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent/40" />}
+                        <Switch
+                          checked={notifications[key]}
+                          onCheckedChange={(checked) => handleToggle(key, checked)}
+                          disabled={isDisabled || unsupported}
+                          className="data-[state=checked]:bg-primary"
+                        />
+                      </div>
+                    </div>
+                  );
                 })}
-                error={securityErrors.currentPassword}
-              />
-              <SettingsInput
-                label="New Password"
-                type="password"
-                placeholder="Enter new password"
-                register={registerSecurity("newPassword", {
-                  required: "New password is required",
-                  minLength: {
-                    value: 8,
-                    message: "Password must be at least 8 characters",
-                  },
-                })}
-                error={securityErrors.newPassword}
-              />
-              <SettingsInput
-                label="Confirm New Password"
-                type="password"
-                placeholder="Confirm new password"
-                register={registerSecurity("confirmPassword", {
-                  required: "Please confirm your password",
-                  validate: (value) =>
-                    value === watch("newPassword") || "Passwords do not match",
-                })}
-                error={securityErrors.confirmPassword}
-              />
+              </div>
             </div>
 
-            <div className="flex gap-3 justify-start pt-6 mt-6 border-t border-accent/10">
-              <Button
-                type="submit"
-                className="hover:bg-primary bg-slate-700/10 text-accent hover:text-tertiary duration-500"
-              >
-                Update Password
-              </Button>
-            </div>
-          </SettingsSection>
-        </form>
-
-        <SettingsSection
-          title="Notifications"
-          description="Manage your email and app notifications."
-        >
-          <div className="divide-y divide-accent/10">
-            <SettingsToggle
-              label="Project Updates"
-              description="Get notified when there are changes to your projects."
-              checked={notifications.projectUpdates}
-              onChange={(checked) =>
-                setNotifications({ ...notifications, projectUpdates: checked })
-              }
-            />
-            <SettingsToggle
-              label="Email Notifications"
-              description="Receive email updates about your account activity."
-              checked={notifications.emailNotifications}
-              onChange={(checked) =>
-                setNotifications({
-                  ...notifications,
-                  emailNotifications: checked,
-                })
-              }
-            />
-            <SettingsToggle
-              label="Browser Notifications"
-              description="Get browser push notifications for important updates."
-              checked={notifications.browserNotifications}
-              onChange={(checked) =>
-                setNotifications({
-                  ...notifications,
-                  browserNotifications: checked,
-                })
-              }
-            />
-          </div>
-        </SettingsSection>
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center sm:justify-end border-t border-accent/10 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-accent/20 text-accent hover:bg-accent/5 w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <div className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 rounded-2xl px-4 py-3 sm:px-3 sm:py-2 w-full sm:w-auto">
-            <NotebookPenIcon className="text-white w-4 h-4" />
-
-            <Button
-              type="button"
-              onClick={handleSaveNotifications}
-              className="text-sm text-white p-0 h-auto bg-transparent hover:bg-transparent"
-            >
-              Save Preferences
-            </Button>
           </div>
         </div>
       </div>

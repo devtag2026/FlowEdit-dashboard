@@ -1,403 +1,402 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { SettingsInput } from "@/components/Settings/SettingsInput";
-import { SettingsToggle } from "@/components/Settings/SettingsToggle";
-import { SettingsSection } from "@/components/Settings/SettingsSection";
-import Image from "next/image";
-import { NotebookPenIcon, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  fetchProfile,
-  updateProfile,
-  updateEmail,
-  updatePassword,
-  uploadAvatar,
-  removeAvatar,
-} from "@/lib/queries/profile";
+  Loader2, ShieldCheck,
+  CheckCircle2, AlertCircle, BellOff,
+  Bell, User,
+  Activity, Clock, FolderCheck,
+} from "lucide-react";
+import { fetchProfile, updateProfile } from "@/lib/queries/profile";
+import { fetchClientProjects } from "@/lib/queries/projects";
 
-export default function AccountSettings() {
-  const [profile, setProfile]           = useState(null);
-  const [avatarUrl, setAvatarUrl]       = useState(null);
-  const [avatarLoading, setAvatarLoading] = useState(false);
+// ─── constants ────────────────────────────────────────────────────────────────
+
+const DEFAULT_NOTIF = {
+  projectUpdates:      true,
+  emailNotifications:  true,
+  broadcastUpdates:    true,
+  browserNotifications: false,
+};
+
+const NOTIF_OPTIONS = [
+  { key: "projectUpdates",      label: "Project Updates",      description: "Get notified when your project status changes." },
+  { key: "emailNotifications",  label: "Email Notifications",  description: "Receive email updates about your account activity." },
+  { key: "broadcastUpdates",    label: "Broadcast Messages",   description: "Receive platform-wide announcements from the team." },
+  { key: "browserNotifications",label: "Browser Notifications",description: "Show push notifications in your browser.", browser: true },
+];
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+async function askBrowserPermission() {
+  if (!("Notification" in window)) return "unsupported";
+  if (Notification.permission !== "default") return Notification.permission;
+  const res = await Notification.requestPermission();
+  return res;
+}
+
+function fireBrowserNotification(title, body) {
+  if (typeof window === "undefined") return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  new Notification(title, { body, icon: "/favicon.ico" });
+}
+
+// ─── component ────────────────────────────────────────────────────────────────
+
+export default function ClientProfile() {
+  const [profile, setProfile]     = useState(null);
+  const [projects, setProjects]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+
   const [profileSaving, setProfileSaving] = useState(false);
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [notifSaving, setNotifSaving]   = useState(false);
-  const [profileMsg, setProfileMsg]     = useState(null); 
-  const [passwordMsg, setPasswordMsg]   = useState(null);
-  const [notifMsg, setNotifMsg]         = useState(null);
-  const fileInputRef = useRef(null);
+  const [profileMsg, setProfileMsg]       = useState(null);
 
-  const [notifications, setNotifications] = useState({
-    projectUpdates:       true,
-    emailNotifications:   true,
-    browserNotifications: false,
-    weeklyDigest:         true,
+  const [notifications, setNotifications]     = useState(DEFAULT_NOTIF);
+  const [savingKey, setSavingKey]             = useState(null);
+  const [notifMsgs, setNotifMsgs]             = useState({});
+  const [browserPerm, setBrowserPerm]         = useState("default");
+
+  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm({
+    defaultValues: { name: "" },
   });
 
-  const {
-    register: registerProfile,
-    handleSubmit: handleSubmitProfile,
-    reset: resetProfile,
-    formState: { errors: profileErrors },
-  } = useForm({
-    defaultValues: { name: "", email: "", phone: "" },
-  });
-
-  const {
-    register: registerSecurity,
-    handleSubmit: handleSubmitSecurity,
-    formState: { errors: securityErrors },
-    watch,
-    reset: resetSecurity,
-    setError: setSecurityError,
-  } = useForm({
-    defaultValues: {
-      currentPassword: "",
-      newPassword:     "",
-      confirmPassword: "",
-    },
-  });
+  // ── load ──────────────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const prof = await fetchProfile();
+      setProfile(prof);
+      setAvatarUrl(prof.avatar_url || null);
+      reset({ name: prof.name || "" });
+      if (prof.notification_preferences) {
+        setNotifications({ ...DEFAULT_NOTIF, ...prof.notification_preferences });
+      }
+      const projs = await fetchClientProjects(prof.id).catch(() => []);
+      setProjects(projs || []);
+    } catch (err) {
+      console.error("Profile load failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [reset]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchProfile();
-        setProfile(data);
-        setAvatarUrl(data.avatar_url || null);
-        resetProfile({
-          name:  data.name  || "",
-          email: data.email || "",
-          phone: data.phone || "",
-        });
-      } catch (err) {
-        console.error("Failed to load profile:", err);
-      }
-    };
     load();
-  }, [resetProfile]);
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setBrowserPerm(Notification.permission);
+    } else {
+      setBrowserPerm("unsupported");
+    }
+  }, [load]);
 
-  const onSubmitProfile = async (data) => {
+  // ── profile save ──────────────────────────────────────────────────────────
+  const onSaveProfile = async (data) => {
     try {
       setProfileSaving(true);
       setProfileMsg(null);
-
-      const updated = await updateProfile({
-        name:  data.name.trim(),
-        phone: data.phone.trim(),
-      });
-      setProfile((prev) => ({ ...prev, ...updated }));
-
-
-      if (data.email !== profile?.email) {
-        await updateEmail(data.email.trim());
-        setProfile((prev) => ({ ...prev, email: data.email.trim() }));
-      }
-
-      setProfileMsg({ type: "success", text: "Profile updated successfully." });
+      const updated = await updateProfile({ name: data.name.trim() });
+      setProfile((p) => ({ ...p, ...updated }));
+      reset({ name: updated.name || "" });
+      setProfileMsg({ ok: true, text: "Profile saved successfully." });
+      setTimeout(() => setProfileMsg(null), 3000);
     } catch (err) {
-      console.error(err);
-      setProfileMsg({ type: "error", text: err.message || "Failed to update profile." });
+      setProfileMsg({ ok: false, text: err.message || "Failed to save." });
     } finally {
       setProfileSaving(false);
     }
   };
 
-  const onSubmitSecurity = async (data) => {
+  // ── notification toggle ───────────────────────────────────────────────────
+  const onToggle = async (key, checked, isBrowser) => {
+    if (isBrowser && checked) {
+      const perm = await askBrowserPermission();
+      setBrowserPerm(perm);
+      if (perm === "unsupported") {
+        flashNotif(key, false, "Browser notifications are not supported here.");
+        return;
+      }
+      if (perm !== "granted") {
+        flashNotif(key, false, "Permission denied — allow notifications in your browser settings.");
+        return;
+      }
+      fireBrowserNotification("Notifications enabled", "You'll receive browser notifications from FlowEdit.");
+    }
+
+    const next = { ...notifications, [key]: checked };
+    setNotifications(next);
+
     try {
-      setPasswordSaving(true);
-      setPasswordMsg(null);
-      await updatePassword(data.newPassword);
-      setPasswordMsg({ type: "success", text: "Password updated successfully." });
-      resetSecurity();
+      setSavingKey(key);
+      await updateProfile({ notification_preferences: next });
+      flashNotif(key, true, "Saved");
     } catch (err) {
-      console.error(err);
-      setPasswordMsg({ type: "error", text: err.message || "Failed to update password." });
+      setNotifications((p) => ({ ...p, [key]: !checked })); // revert
+      flashNotif(key, false, err.message.includes("notification_preferences")
+        ? "Column missing — run the SQL migration in Supabase."
+        : "Failed to save.");
     } finally {
-      setPasswordSaving(false);
+      setSavingKey(null);
     }
   };
 
-  const handleAvatarChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      setAvatarLoading(true);
-      const url = await uploadAvatar(file);
-      setAvatarUrl(url);
-    } catch (err) {
-      console.error("Avatar upload failed:", err);
-      alert("Failed to upload avatar. Please try again.");
-    } finally {
-      setAvatarLoading(false);
-    }
-  };
+  function flashNotif(key, ok, text, ms = 3500) {
+    setNotifMsgs((p) => ({ ...p, [key]: { ok, text } }));
+    setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), ms);
+  }
 
-  const handleRemoveAvatar = async () => {
-    try {
-      setAvatarLoading(true);
-      await removeAvatar();
-      setAvatarUrl(null);
-    } catch (err) {
-      console.error("Remove avatar failed:", err);
-    } finally {
-      setAvatarLoading(false);
-    }
-  };
+  // ── stats ─────────────────────────────────────────────────────────────────
+  const active    = projects.filter((p) => ["submitted","in_progress","review"].includes(p.status)).length;
+  const completed = projects.filter((p) => ["completed","ready_to_post","posted"].includes(p.status)).length;
 
-  const handleSaveNotifications = async () => {
-    try {
-      setNotifSaving(true);
-      setNotifMsg(null);
-      await new Promise((r) => setTimeout(r, 500)); 
-      setNotifMsg({ type: "success", text: "Notification preferences saved." });
-    } catch (err) {
-      setNotifMsg({ type: "error", text: "Failed to save preferences." });
-    } finally {
-      setNotifSaving(false);
-    }
-  };
-
-  const StatusMsg = ({ msg }) => {
-    if (!msg) return null;
+  if (loading) {
     return (
-      <p className={`text-sm mt-2 ${msg.type === "success" ? "text-green-600" : "text-red-500"}`}>
-        {msg.text}
-      </p>
+      <div className="min-h-screen bg-secondary flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
-  };
+  }
 
   return (
     <div className="min-h-screen bg-secondary p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-accent mb-2">Account Settings</h1>
-          <p className="text-accent/70">Manage your profile and account preferences.</p>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent">Account Settings</h1>
+          <p className="text-sm text-accent/60 mt-1">Manage your profile and notification preferences.</p>
         </div>
 
-        <SettingsSection title="Profile" description="Update your profile photo.">
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 mb-6">
-            <div className="relative shrink-0">
-              <div className="w-16 h-16 lg:w-20 lg:h-20 rounded-full overflow-hidden bg-accent/10 flex items-center justify-center">
-                {avatarLoading ? (
-                  <Loader2 className="animate-spin text-accent w-6 h-6" />
-                ) : avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt="Profile"
-                    width={80}
-                    height={80}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-2xl font-bold text-accent/40">
-                    {profile?.name?.[0]?.toUpperCase() || "?"}
-                  </span>
-                )}
-              </div>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-            <div className="flex flex-col items-center lg:items-start flex-1 text-center lg:text-left">
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarChange}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  disabled={avatarLoading}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-accent/20 text-accent hover:bg-primary/5 text-md font-onest shadow-accent/40 shadow-lg w-full sm:w-auto"
-                >
-                  {avatarLoading ? "Uploading..." : "Upload new photo"}
-                </Button>
-                {avatarUrl && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={avatarLoading}
-                    onClick={handleRemoveAvatar}
-                    className="text-red-500 font-onest font-medium hover:bg-red-50 text-md w-full sm:w-auto"
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
-              <p className="text-xs sm:text-sm font-onest text-accent/60 pt-4 max-w-md">
-                Recommended: Square JPG, PNG, or GIF, at least 1000x1000 pixels.
-              </p>
-            </div>
-          </div>
-        </SettingsSection>
-
-        <form onSubmit={handleSubmitProfile(onSubmitProfile)}>
-          <SettingsSection
-            title="User Information"
-            description="Update your name and personal details."
-          >
-            <div className="space-y-4">
-              <SettingsInput
-                label="Full Name"
-                placeholder="Enter your full name"
-                register={registerProfile("name", {
-                  required: "Name is required",
-                  minLength: { value: 2, message: "Name must be at least 2 characters" },
-                })}
-                error={profileErrors.name}
-              />
-              <SettingsInput
-                label="Email Address"
-                type="email"
-                placeholder="your.email@example.com"
-                register={registerProfile("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: "Invalid email address",
-                  },
-                })}
-                error={profileErrors.email}
-              />
-              <SettingsInput
-                label="Phone"
-                type="tel"
-                placeholder="+1 234 567 8900"
-                register={registerProfile("phone", {
-                  pattern: {
-                    value: /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/,
-                    message: "Invalid phone number",
-                  },
-                })}
-                error={profileErrors.phone}
-              />
-            </div>
-
-            <StatusMsg msg={profileMsg} />
-
-            <div className="flex gap-3 justify-start pt-6 mt-6 border-t border-accent/10">
-              <Button
-                type="submit"
-                disabled={profileSaving}
-                className="hover:bg-primary bg-slate-700/10 text-accent hover:text-tertiary duration-500 disabled:opacity-60"
-              >
-                {profileSaving ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Saving...
-                  </span>
-                ) : "Save Profile"}
-              </Button>
-            </div>
-          </SettingsSection>
-        </form>
-
-        <form onSubmit={handleSubmitSecurity(onSubmitSecurity)}>
-          <SettingsSection
-            title="Security"
-            description="Manage your password and security settings."
-          >
-            <div className="space-y-4">
-              <SettingsInput
-                label="New Password"
-                type="password"
-                placeholder="Enter new password"
-                register={registerSecurity("newPassword", {
-                  required: "New password is required",
-                  minLength: { value: 8, message: "Password must be at least 8 characters" },
-                })}
-                error={securityErrors.newPassword}
-              />
-              <SettingsInput
-                label="Confirm New Password"
-                type="password"
-                placeholder="Confirm new password"
-                register={registerSecurity("confirmPassword", {
-                  required: "Please confirm your password",
-                  validate: (value) =>
-                    value === watch("newPassword") || "Passwords do not match",
-                })}
-                error={securityErrors.confirmPassword}
-              />
-            </div>
-
-            <StatusMsg msg={passwordMsg} />
-
-            <div className="flex gap-3 justify-start pt-6 mt-6 border-t border-accent/10">
-              <Button
-                type="submit"
-                disabled={passwordSaving}
-                className="hover:bg-primary bg-slate-700/10 text-accent hover:text-tertiary duration-500 disabled:opacity-60"
-              >
-                {passwordSaving ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Updating...
-                  </span>
-                ) : "Update Password"}
-              </Button>
-            </div>
-          </SettingsSection>
-        </form>
-
-        <SettingsSection
-          title="Notifications"
-          description="Manage your email and app notifications."
-        >
-          <div className="divide-y divide-accent/10">
-            <SettingsToggle
-              label="Project Updates"
-              description="Get notified when there are changes to your projects."
-              checked={notifications.projectUpdates}
-              onChange={(checked) =>
-                setNotifications({ ...notifications, projectUpdates: checked })
-              }
+          {/* ── sidebar ── */}
+          <div className="lg:col-span-4 space-y-4">
+            <ProfileCard
+              name={profile?.name}
+              email={profile?.email}
+              avatarUrl={avatarUrl}
+              memberSince={formatDate(profile?.created_at)}
+              roleBadge={{ label: "Client", className: "bg-blue-100 text-blue-700" }}
             />
-            <SettingsToggle
-              label="Email Notifications"
-              description="Receive email updates about your account activity."
-              checked={notifications.emailNotifications}
-              onChange={(checked) =>
-                setNotifications({ ...notifications, emailNotifications: checked })
-              }
-            />
-            <SettingsToggle
-              label="Browser Notifications"
-              description="Get browser push notifications for important updates."
-              checked={notifications.browserNotifications}
-              onChange={(checked) =>
-                setNotifications({ ...notifications, browserNotifications: checked })
-              }
-            />
+
+            <div className="bg-tertiary rounded-3xl p-5">
+              <h3 className="text-xs font-semibold text-accent/50 uppercase mb-3">Projects</h3>
+              <StatRow icon={Activity}    label="Total"     value={projects.length} />
+              <StatRow icon={Clock}       label="Active"    value={active} />
+              <StatRow icon={FolderCheck} label="Completed" value={completed} last />
+            </div>
+
+            <OAuthBadge />
           </div>
 
-          <StatusMsg msg={notifMsg} />
-        </SettingsSection>
+          {/* ── main ── */}
+          <div className="lg:col-span-8 space-y-6">
+            <PersonalInfoForm
+              register={register}
+              handleSubmit={handleSubmit}
+              errors={errors}
+              isDirty={isDirty}
+              saving={profileSaving}
+              msg={profileMsg}
+              email={profile?.email}
+              onSubmit={onSaveProfile}
+            />
 
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center sm:justify-end border-t border-accent/10 pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-accent/20 text-accent hover:bg-accent/5 w-full sm:w-auto"
-          >
-            Cancel
+            <NotificationsCard
+              options={NOTIF_OPTIONS}
+              notifications={notifications}
+              savingKey={savingKey}
+              notifMsgs={notifMsgs}
+              browserPerm={browserPerm}
+              onToggle={onToggle}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── shared sub-components ────────────────────────────────────────────────────
+
+function ProfileCard({ name, email, avatarUrl, memberSince, roleBadge }) {
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => { setImgError(false); }, [avatarUrl]);
+
+  return (
+    <div className="bg-tertiary rounded-3xl p-6 flex flex-col items-center text-center space-y-4">
+      <div className="w-24 h-24 rounded-full overflow-hidden bg-accent/10 flex items-center justify-center ring-4 ring-white shadow-lg">
+        {avatarUrl && !imgError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" onError={() => setImgError(true)} />
+        ) : (
+          <span className="text-3xl font-bold text-accent/40 select-none">
+            {name?.[0]?.toUpperCase() || "?"}
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-0.5 w-full">
+        <h2 className="text-xl font-bold text-accent truncate">{name || "—"}</h2>
+        <p className="text-sm text-accent/55 truncate">{email || "—"}</p>
+      </div>
+
+      {roleBadge && (
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${roleBadge.className}`}>
+          {roleBadge.label}
+        </span>
+      )}
+
+      <p className="text-xs text-accent/40">
+        Member since{" "}
+        <span className="font-medium text-accent/60">{memberSince || "—"}</span>
+      </p>
+    </div>
+  );
+}
+
+function StatRow({ icon: Icon, label, value, last }) {
+  return (
+    <div className={`flex items-center justify-between py-2.5 ${!last ? "border-b border-accent/8" : ""}`}>
+      <div className="flex items-center gap-2.5 text-sm text-accent/65">
+        <Icon className="w-4 h-4 text-accent/35" />
+        {label}
+      </div>
+      <span className="text-sm font-bold text-accent">{value}</span>
+    </div>
+  );
+}
+
+function OAuthBadge() {
+  return (
+    <div className="flex items-start gap-3 bg-primary/5 border border-primary/15 rounded-2xl px-4 py-3.5">
+      <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+      <p className="text-xs text-accent/70 leading-relaxed">
+        Signed in via <strong>Google OAuth</strong>. Your email is managed by Google and cannot be changed here.
+      </p>
+    </div>
+  );
+}
+
+function PersonalInfoForm({ register, handleSubmit, errors, isDirty, saving, msg, email, onSubmit }) {
+  return (
+    <div className="bg-tertiary rounded-3xl p-6">
+      <div className="mb-5">
+        <h3 className="text-lg font-semibold text-accent">Personal Information</h3>
+        <p className="text-sm text-accent/55">Update your display name.</p>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-accent flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-accent/45" /> Full Name
+          </Label>
+          <Input
+            placeholder="Enter your full name"
+            {...register("name", {
+              required: "Name is required",
+              minLength: { value: 2, message: "At least 2 characters" },
+            })}
+            className={`bg-white border-accent/20 text-accent placeholder:text-accent/30 focus:border-primary focus-visible:ring-0 h-11 ${errors.name ? "border-red-400" : ""}`}
+          />
+          {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium text-accent">Email Address</Label>
+          <div className="flex items-center gap-2 h-11 px-3 rounded-lg border border-accent/15 bg-accent/5">
+            <span className="text-sm text-accent/55 flex-1 truncate">{email || "—"}</span>
+            <span className="text-xs bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-semibold shrink-0">Google OAuth</span>
+          </div>
+          <p className="text-xs text-accent/40">Managed by Google — cannot be edited here.</p>
+        </div>
+
+        {msg && (
+          <p className={`flex items-center gap-1.5 text-xs ${msg.ok ? "text-green-600" : "text-red-500"}`}>
+            {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+            {msg.text}
+          </p>
+        )}
+
+        <div className="flex items-center justify-between pt-3 border-t border-accent/10">
+          <p className="text-xs text-accent/40">{isDirty ? "You have unsaved changes." : "No pending changes."}</p>
+          <Button type="submit" disabled={saving || !isDirty}
+            className="bg-primary hover:bg-primary/90 text-white rounded-xl px-6 h-10 disabled:opacity-50 gap-2">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : "Save Changes"}
           </Button>
-          <div className="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 rounded-2xl px-4 py-3 sm:px-3 sm:py-2 w-full sm:w-auto">
-            <NotebookPenIcon className="text-white w-4 h-4" />
-            <Button
-              type="button"
-              disabled={notifSaving}
-              onClick={handleSaveNotifications}
-              className="text-sm text-white p-0 h-auto bg-transparent hover:bg-transparent disabled:opacity-60"
-            >
-              {notifSaving ? "Saving..." : "Save Preferences"}
-            </Button>
-          </div>
         </div>
+      </form>
+    </div>
+  );
+}
+
+function NotificationsCard({ options, notifications, savingKey, notifMsgs, browserPerm, onToggle }) {
+  return (
+    <div className="bg-tertiary rounded-3xl p-6">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <Bell className="w-4 h-4 text-primary" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-accent">Notification Preferences</h3>
+          <p className="text-sm text-accent/55">Each toggle saves instantly to your account in the database.</p>
+        </div>
+      </div>
+
+      <div className="divide-y divide-accent/8">
+        {options.map(({ key, label, description, browser }) => {
+          const isSaving   = savingKey === key;
+          const blocked    = browser && browserPerm === "denied";
+          const unsupported = browser && browserPerm === "unsupported";
+          const msg        = notifMsgs[key];
+
+          return (
+            <div key={key} className="flex items-start justify-between gap-4 py-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium text-accent">{label}</p>
+                  {blocked && (
+                    <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                      <BellOff className="w-3 h-3" /> Blocked
+                    </span>
+                  )}
+                  {unsupported && (
+                    <span className="text-xs text-accent/40 bg-accent/10 px-2 py-0.5 rounded-full">Not supported</span>
+                  )}
+                </div>
+                <p className="text-xs text-accent/50 mt-0.5">{description}</p>
+                {blocked && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Allow notifications in your browser&apos;s site settings to enable this.
+                  </p>
+                )}
+                {msg && (
+                  <p className={`text-xs mt-1.5 flex items-center gap-1 ${msg.ok ? "text-green-600" : "text-red-500"}`}>
+                    {msg.ok ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                    {msg.text}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0 pt-0.5">
+                {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent/40" />}
+                <Switch
+                  checked={notifications[key]}
+                  onCheckedChange={(v) => onToggle(key, v, !!browser)}
+                  disabled={isSaving || unsupported}
+                  className="data-[state=checked]:bg-primary"
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
