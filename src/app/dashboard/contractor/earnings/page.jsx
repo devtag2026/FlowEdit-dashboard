@@ -11,7 +11,7 @@ export default function Earnings() {
   const [profile, setProfile]     = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
-  // ✅ Fetch profile ONCE at page level — no more concurrent getUser() calls
+  // Fetch profile ONCE at page level — no more concurrent getUser() calls
   useEffect(() => {
     fetchProfile()
       .then(setProfile)
@@ -38,7 +38,7 @@ export default function Earnings() {
         onChange={setActiveTab}
       />
 
-      {/* ✅ Pass profile down — components don't need to call getUser() themselves */}
+      {/* Pass profile down — components don't need to call getUser() themselves */}
       {activeTab === "payout" && <Payout  profile={profile} />}
       {activeTab === "wallet" && <WalletSection profile={profile} />}
     </main>

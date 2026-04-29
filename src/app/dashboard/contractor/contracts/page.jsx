@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { fetchContractorContracts, signContract } from "@/lib/queries/earnings";
+import { fetchContractorContracts, signContract, fetchOnboardingSteps } from "@/lib/queries/earnings";
 import { downloadFile } from "@/lib/utils/download";
 import { Button } from "@/components/common/Button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Download, FileText, PenLine, FileX, Loader2 } from "lucide-react";
 import Loader from "@/components/common/Loader";
+import OnboardingSteps from "@/components/resources/OnboardingSteps";
 
 function statusColor(status) {
   if (status === "signed" || status === "active") return "bg-green-100 text-green-700";
@@ -23,16 +24,23 @@ function formatDate(dateStr) {
 }
 
 export default function Contracts() {
-  const [contracts, setContracts] = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
-  const [signingId, setSigningId] = useState(null);
+  const [contracts, setContracts]   = useState([]);
+  const [steps, setSteps]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [loadingSteps, setLoadingSteps] = useState(true);
+  const [error, setError]           = useState(null);
+  const [signingId, setSigningId]   = useState(null);
 
   useEffect(() => {
     fetchContractorContracts()
       .then(setContracts)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    fetchOnboardingSteps()
+      .then(setSteps)
+      .catch(console.error)
+      .finally(() => setLoadingSteps(false));
   }, []);
 
   const handleSign = async (contractId) => {
@@ -68,6 +76,20 @@ export default function Contracts() {
 
   return (
     <main className="min-h-screen pt-2 px-3 md:px-8 md:py-5 pb-10 space-y-6">
+
+      {/* Onboarding Progress */}
+      <Card className="bg-tertiary rounded-xl md:rounded-3xl">
+        <CardContent>
+          <h2 className="text-accent font-semibold md:font-bold text-xl md:text-2xl mb-2">
+            Onboarding Progress
+          </h2>
+          {loadingSteps ? (
+            <div className="flex justify-center py-6"><Loader /></div>
+          ) : (
+            <OnboardingSteps steps={steps} />
+          )}
+        </CardContent>
+      </Card>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm">

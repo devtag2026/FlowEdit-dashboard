@@ -7,8 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Loader2, ShieldCheck,
-  CheckCircle2, AlertCircle, BellOff,
+  Loader2,
+  CheckCircle2, AlertCircle,
   Bell, User,
   Activity, Clock, FolderCheck,
 } from "lucide-react";
@@ -21,14 +21,12 @@ const DEFAULT_NOTIF = {
   projectUpdates:      true,
   emailNotifications:  true,
   broadcastUpdates:    true,
-  browserNotifications: false,
 };
 
 const NOTIF_OPTIONS = [
-  { key: "projectUpdates",      label: "Project Updates",      description: "Get notified when your project status changes." },
-  { key: "emailNotifications",  label: "Email Notifications",  description: "Receive email updates about your account activity." },
-  { key: "broadcastUpdates",    label: "Broadcast Messages",   description: "Receive platform-wide announcements from the team." },
-  { key: "browserNotifications",label: "Browser Notifications",description: "Show push notifications in your browser.", browser: true },
+  { key: "projectUpdates",     label: "Project Updates",    description: "Get notified when your project status changes." },
+  { key: "emailNotifications", label: "Email Notifications",description: "Receive email updates about your account activity." },
+  { key: "broadcastUpdates",   label: "Broadcast Messages", description: "Receive platform-wide announcements from the team." },
 ];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -36,19 +34,6 @@ const NOTIF_OPTIONS = [
 function formatDate(d) {
   if (!d) return null;
   return new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-}
-
-async function askBrowserPermission() {
-  if (!("Notification" in window)) return "unsupported";
-  if (Notification.permission !== "default") return Notification.permission;
-  const res = await Notification.requestPermission();
-  return res;
-}
-
-function fireBrowserNotification(title, body) {
-  if (typeof window === "undefined") return;
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  new Notification(title, { body, icon: "/favicon.ico" });
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -65,7 +50,6 @@ export default function ClientProfile() {
   const [notifications, setNotifications]     = useState(DEFAULT_NOTIF);
   const [savingKey, setSavingKey]             = useState(null);
   const [notifMsgs, setNotifMsgs]             = useState({});
-  const [browserPerm, setBrowserPerm]         = useState("default");
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm({
     defaultValues: { name: "" },
@@ -93,11 +77,6 @@ export default function ClientProfile() {
 
   useEffect(() => {
     load();
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setBrowserPerm(Notification.permission);
-    } else {
-      setBrowserPerm("unsupported");
-    }
   }, [load]);
 
   // ── profile save ──────────────────────────────────────────────────────────
@@ -118,21 +97,7 @@ export default function ClientProfile() {
   };
 
   // ── notification toggle ───────────────────────────────────────────────────
-  const onToggle = async (key, checked, isBrowser) => {
-    if (isBrowser && checked) {
-      const perm = await askBrowserPermission();
-      setBrowserPerm(perm);
-      if (perm === "unsupported") {
-        flashNotif(key, false, "Browser notifications are not supported here.");
-        return;
-      }
-      if (perm !== "granted") {
-        flashNotif(key, false, "Permission denied — allow notifications in your browser settings.");
-        return;
-      }
-      fireBrowserNotification("Notifications enabled", "You'll receive browser notifications from FlowEdit.");
-    }
-
+  const onToggle = async (key, checked) => {
     const next = { ...notifications, [key]: checked };
     setNotifications(next);
 
@@ -194,7 +159,6 @@ export default function ClientProfile() {
               <StatRow icon={FolderCheck} label="Completed" value={completed} last />
             </div>
 
-            <OAuthBadge />
           </div>
 
           {/* ── main ── */}
@@ -215,7 +179,6 @@ export default function ClientProfile() {
               notifications={notifications}
               savingKey={savingKey}
               notifMsgs={notifMsgs}
-              browserPerm={browserPerm}
               onToggle={onToggle}
             />
           </div>
@@ -275,17 +238,6 @@ function StatRow({ icon: Icon, label, value, last }) {
   );
 }
 
-function OAuthBadge() {
-  return (
-    <div className="flex items-start gap-3 bg-primary/5 border border-primary/15 rounded-2xl px-4 py-3.5">
-      <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-      <p className="text-xs text-accent/70 leading-relaxed">
-        Signed in via <strong>Google OAuth</strong>. Your email is managed by Google and cannot be changed here.
-      </p>
-    </div>
-  );
-}
-
 function PersonalInfoForm({ register, handleSubmit, errors, isDirty, saving, msg, email, onSubmit }) {
   return (
     <div className="bg-tertiary rounded-3xl p-6">
@@ -338,7 +290,7 @@ function PersonalInfoForm({ register, handleSubmit, errors, isDirty, saving, msg
   );
 }
 
-function NotificationsCard({ options, notifications, savingKey, notifMsgs, browserPerm, onToggle }) {
+function NotificationsCard({ options, notifications, savingKey, notifMsgs, onToggle }) {
   return (
     <div className="bg-tertiary rounded-3xl p-6">
       <div className="mb-5 flex items-start gap-3">
@@ -347,37 +299,20 @@ function NotificationsCard({ options, notifications, savingKey, notifMsgs, brows
         </div>
         <div>
           <h3 className="text-lg font-semibold text-accent">Notification Preferences</h3>
-          <p className="text-sm text-accent/55">Each toggle saves instantly to your account in the database.</p>
+          <p className="text-sm text-accent/55">Each toggle saves instantly to your account.</p>
         </div>
       </div>
 
       <div className="divide-y divide-accent/8">
-        {options.map(({ key, label, description, browser }) => {
-          const isSaving   = savingKey === key;
-          const blocked    = browser && browserPerm === "denied";
-          const unsupported = browser && browserPerm === "unsupported";
-          const msg        = notifMsgs[key];
+        {options.map(({ key, label, description }) => {
+          const isSaving = savingKey === key;
+          const msg      = notifMsgs[key];
 
           return (
             <div key={key} className="flex items-start justify-between gap-4 py-4">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-accent">{label}</p>
-                  {blocked && (
-                    <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                      <BellOff className="w-3 h-3" /> Blocked
-                    </span>
-                  )}
-                  {unsupported && (
-                    <span className="text-xs text-accent/40 bg-accent/10 px-2 py-0.5 rounded-full">Not supported</span>
-                  )}
-                </div>
+                <p className="text-sm font-medium text-accent">{label}</p>
                 <p className="text-xs text-accent/50 mt-0.5">{description}</p>
-                {blocked && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    Allow notifications in your browser&apos;s site settings to enable this.
-                  </p>
-                )}
                 {msg && (
                   <p className={`text-xs mt-1.5 flex items-center gap-1 ${msg.ok ? "text-green-600" : "text-red-500"}`}>
                     {msg.ok ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
@@ -389,8 +324,8 @@ function NotificationsCard({ options, notifications, savingKey, notifMsgs, brows
                 {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-accent/40" />}
                 <Switch
                   checked={notifications[key]}
-                  onCheckedChange={(v) => onToggle(key, v, !!browser)}
-                  disabled={isSaving || unsupported}
+                  onCheckedChange={(v) => onToggle(key, v)}
+                  disabled={isSaving}
                   className="data-[state=checked]:bg-primary"
                 />
               </div>

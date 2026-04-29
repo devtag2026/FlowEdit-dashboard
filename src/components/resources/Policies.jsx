@@ -10,7 +10,7 @@ const filters = [
   { label: "Privacy",  value: "privacy" },
 ];
 
-// ✅ Accepts real policies from DB via props
+// Accepts real policies from DB via props
 // Falls back to empty state if none
 export default function Policies({ policies = [] }) {
   const [activeFilter, setActiveFilter] = useState("all");

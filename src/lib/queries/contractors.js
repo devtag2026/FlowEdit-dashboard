@@ -55,6 +55,7 @@ export async function fetchContractors() {
               return sum + Math.max(0, days)
             }, 0) / completedProjects.length
           )
+          
         : null
     const avgDeliveryTime = avgDeliveryDays !== null ? `${avgDeliveryDays}d` : null
 

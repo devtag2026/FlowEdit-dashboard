@@ -4,12 +4,14 @@ import { Button } from "./../common/Button";
 const PlanCard = ({ plan }) => {
   return (
     <div
-      className={`relative bg-tertiary rounded-2xl md:rounded-3xl p-4 md:p-4 flex flex-col transition-all duration-300
-        ${plan.highlighted ? "shadow-xl scale-100" : "scale-97"}`}
+      className={`relative bg-tertiary rounded-2xl md:rounded-3xl p-6 flex flex-col transition-all duration-300
+        ${plan.highlighted
+          ? "shadow-xl ring-2 ring-primary"
+          : "hover:shadow-md"}`}
     >
       {plan.highlighted && (
-        <span className="text-xs absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-primary text-white md:text-sm px-4 py-2 rounded-lg shadow">
-          Current Plan
+        <span className="inline-flex items-center gap-1 self-center mb-3 text-xs font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full">
+          <Check size={10} /> Your Plan
         </span>
       )}
 
@@ -32,27 +34,27 @@ const PlanCard = ({ plan }) => {
             key={feature}
             className="flex items-center gap-3 text-accent text-sm"
           >
-            <span
-              className={`h-4 w-4 flex items-center justify-center rounded-full
-          ${plan.highlighted ? "bg-slate-300" : "bg-white"}`}
-            >
-              <Check size={10} className="text-slate-600" />
+            <span className="h-4 w-4 flex items-center justify-center rounded-full bg-primary/10">
+              <Check size={10} className="text-primary" />
             </span>
-
             {feature}
           </li>
         ))}
       </ul>
 
-      <Button
-        onClick={plan.onClick}
-        disabled={plan.buttonDisabled}
-        className={`rounded-lg py-2 transition
-          ${plan.highlighted ? "bg-tertiary text-slate-400 shadow-xl" : "bg-white text-accent"}
-          ${plan.buttonDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-100"}`}
-      >
-        {plan.buttonText}
-      </Button>
+      {plan.buttonText && (
+        <Button
+          onClick={plan.onClick}
+          disabled={plan.buttonDisabled}
+          className={`rounded-lg py-2 transition
+            ${plan.highlighted
+              ? "bg-primary/10 text-primary font-semibold"
+              : "bg-white text-accent hover:bg-slate-100"}
+            ${plan.buttonDisabled ? "opacity-60 cursor-not-allowed" : ""}`}
+        >
+          {plan.buttonText}
+        </Button>
+      )}
     </div>
   );
 };

@@ -9,21 +9,21 @@ import { fetchUserProfile } from "@/lib/queries/projects";
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "../../lib/supabase/client";
-const supabase = getSupabaseClient()
+const supabase = getSupabaseClient();
 
 const NotificationPage = () => {
   const btns = [
-    { label: "All", type: "all" },
+    { label: "All",             type: "all" },
     { label: "Project Updates", type: "project_update" },
-    { label: "Assignments", type: "assignment" },
+    { label: "Assignments",     type: "assignment" },
   ];
 
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [active, setActive] = useState("All");
+  const [notifications, setNotifications]         = useState([]);
+  const [loading, setLoading]                     = useState(true);
+  const [active, setActive]                       = useState("All");
   const [selectedNotification, setSelectedNotification] = useState(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [profileId, setProfileId] = useState(null);
+  const [mobileDetailOpen, setMobileDetailOpen]   = useState(false);
+  const [profileId, setProfileId]                 = useState(null);
 
   useEffect(() => {
     let channel;
@@ -35,15 +35,12 @@ const NotificationPage = () => {
           const data = await fetchNotifications(profile.id);
           setNotifications(data || []);
 
-          // User-scoped channel name prevents cross-session subscription leaks
           channel = supabase
             .channel(`notifications-page-${profile.id}`)
             .on(
               "postgres_changes",
               { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${profile.id}` },
-              (payload) => {
-                setNotifications((prev) => [payload.new, ...prev]);
-              }
+              (payload) => setNotifications((prev) => [payload.new, ...prev])
             )
             .subscribe();
         }
@@ -54,10 +51,7 @@ const NotificationPage = () => {
       }
     }
     load();
-
-    return () => {
-      if (channel) supabase.removeChannel(channel);
-    };
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, []);
 
   const handleSelectNotification = async (notification) => {
@@ -101,11 +95,18 @@ const NotificationPage = () => {
   }
 
   return (
-    <main className="bg-secondary px-3 md:px-8 py-5 pb-10">
-      <div className="flex items-center justify-between pb-3">
-        <h1 className="text-accent font-semibold text-2xl md:text-3xl">
-          Notifications
-        </h1>
+    <main className="bg-secondary min-h-screen px-3 md:px-8 py-6 pb-10">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <h1 className="text-accent font-bold text-2xl md:text-3xl">Notifications</h1>
+          {unreadCount > 0 && (
+            <span className="bg-primary text-white text-xs font-bold px-2.5 py-0.5 rounded-full">
+              {unreadCount}
+            </span>
+          )}
+        </div>
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllRead}
@@ -116,21 +117,28 @@ const NotificationPage = () => {
         )}
       </div>
 
-      <div className="bg-tertiary/90 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 rounded-xl">
-        <div className="lg:col-span-6">
-          {btns.map((btn) => (
-            <button
-              key={btn.label}
-              onClick={() => setActive(btn.label)}
-              className={`text-sm px-2 shadow-md md:px-4 py-1 rounded-lg mr-2 mt-4 cursor-pointer ${
-                active === btn.label
-                  ? "bg-primary text-white"
-                  : "bg-white text-accent hover:bg-gray-300"
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
+      {/* Main panel */}
+      <div className="bg-tertiary grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-2xl">
+
+        {/* Left — list */}
+        <div className="lg:col-span-5 flex flex-col">
+
+          {/* Filter pills */}
+          <div className="flex gap-2 flex-wrap">
+            {btns.map((btn) => (
+              <button
+                key={btn.label}
+                onClick={() => setActive(btn.label)}
+                className={`text-sm px-4 py-1.5 rounded-full font-medium transition-all ${
+                  active === btn.label
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-white text-accent hover:bg-accent/5"
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
 
           <NotificationBar
             notifications={filteredNotifications}
@@ -140,8 +148,9 @@ const NotificationPage = () => {
           />
         </div>
 
-        <div className="hidden lg:block lg:col-span-6">
-          <div className="relative bg-white rounded-3xl p-6 min-h-140">
+        {/* Right — detail (desktop) */}
+        <div className="hidden lg:block lg:col-span-7">
+          <div className="bg-white rounded-2xl min-h-140 h-full">
             {selectedNotification ? (
               <NotificationDetail
                 notification={selectedNotification}
@@ -152,31 +161,32 @@ const NotificationPage = () => {
             )}
           </div>
         </div>
+      </div>
 
-        <div
-          className={`
-            lg:hidden fixed inset-x-0 bottom-0 z-50 bg-white border-t border-accent/10 rounded-t-3xl
-            transition-transform duration-300 ease-out shadow-2xl
-            ${mobileDetailOpen ? "translate-y-0" : "translate-y-full"}
-          `}
-          style={{ maxHeight: "85vh" }}
-        >
-          {selectedNotification && (
-            <NotificationDetail
-              notification={selectedNotification}
-              isMobile={true}
-              setMobileDetailOpen={setMobileDetailOpen}
-            />
-          )}
-        </div>
-
-        {mobileDetailOpen && (
-          <div
-            className="lg:hidden fixed inset-0 bg-black/60 z-30"
-            onClick={() => setMobileDetailOpen(false)}
+      {/* Mobile detail sheet */}
+      <div
+        className={`
+          lg:hidden fixed inset-x-0 bottom-0 z-50 bg-white border-t border-accent/10 rounded-t-3xl
+          transition-transform duration-300 ease-out shadow-2xl
+          ${mobileDetailOpen ? "translate-y-0" : "translate-y-full"}
+        `}
+        style={{ maxHeight: "85vh" }}
+      >
+        {selectedNotification && (
+          <NotificationDetail
+            notification={selectedNotification}
+            isMobile={true}
+            setMobileDetailOpen={setMobileDetailOpen}
           />
         )}
       </div>
+
+      {mobileDetailOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/60 z-30"
+          onClick={() => setMobileDetailOpen(false)}
+        />
+      )}
     </main>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { Play, ArrowLeft, MoveRight, Check, Upload, Link as LinkIcon, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ArrowLeft, MoveRight, Check, Upload, Link as LinkIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,7 @@ import {
   adminApproveProject,
   adminSendToRevision,
   fetchAllAssignedContractorIds,
+  cleanupOldVersionFiles,
 } from "@/lib/queries/projects";
 import { notifyProjectEvent, fetchAdminIds } from "@/lib/queries/notifications";
 import Loader from "@/components/common/Loader";
@@ -37,6 +38,7 @@ import ProjectComments from "./ProjectComments";
 import ProjectApproveModal from "./ProjectApproveModal";
 import VersionHistory from "./VersionHistory";
 import UploadVersionModal from "./UploadVersionModal";
+import VideoPlayer from "./VideoPlayer";
 import {
   Tooltip,
   TooltipContent,
@@ -79,6 +81,8 @@ function ProjectSection({ projectId }) {
     posting_notes: "",
   });
   const [markingReady, setMarkingReady] = useState(false);
+
+  const videoRef = useRef(null);
 
   // Admin actions
   const [publishedUrl, setPublishedUrl] = useState("");
@@ -269,6 +273,7 @@ function ProjectSection({ projectId }) {
         markPosted(projectId, publishedUrl.trim()),
         fetchAllAssignedContractorIds(projectId),
       ]);
+      cleanupOldVersionFiles(project.versions).catch(console.error);
       const recipientIds = [...(project.client_id ? [project.client_id] : []), ...contractorIds];
       if (recipientIds.length) {
         notifyProjectEvent({ event: "marked_as_posted", project, actorName: profile?.name, recipientIds }).catch(console.error);
@@ -338,18 +343,8 @@ function ProjectSection({ projectId }) {
 
         <div className="grid grid-cols-1 h-full">
           <div className="p-3 md:p-6 space-y-4 overflow-hidden">
-            {/* Video Preview */}
-            <div className="aspect-video bg-slate-black rounded-xl md:rounded-2xl flex items-center justify-center relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-black/90 to-black/80" />
-              <div className="relative z-10 text-center">
-                <div className="w-10 h-10 md:w-16 md:h-16 bg-white backdrop-blur rounded-full flex items-center justify-center mb-3 mx-auto cursor-pointer hover:scale-110 transition-transform">
-                  <Play className="w-4 h-4 md:w-8 md:h-8 ml-1" />
-                </div>
-                <p className="text-white/80 text-xs md:text-sm">
-                  {latestVersion ? `Version ${latestVersion.version_number}` : "No video uploaded yet"}
-                </p>
-              </div>
-            </div>
+            {/* Video Player */}
+            <VideoPlayer ref={videoRef} src={latestVersion?.video_url ?? null} />
 
             {/* Version + Actions Bar */}
             <div className="flex flex-col md:flex-row items-center justify-between gap-3">
@@ -650,7 +645,7 @@ function ProjectSection({ projectId }) {
             )}
           </div>
 
-          <ProjectComments projectId={projectId} project={project} />
+          <ProjectComments projectId={projectId} project={project} videoRef={videoRef} />
         </div>
       </CardContent>
 

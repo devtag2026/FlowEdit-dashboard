@@ -1,6 +1,45 @@
 
 import { getSupabaseClient } from "../supabase/client";
-const supabase = getSupabaseClient()
+const supabase = getSupabaseClient();
+
+// Maps each project event to the preference key that must be true per recipient role.
+// Roles not listed for an event are always notified (no opt-out exists for them).
+const EVENT_PREF_MAP = {
+  project_created:      { admin: "newProjectSubmitted" },
+  contractor_assigned:  { client: "projectUpdates", admin: "contractorActivity" },
+  assigned_to_you:      { contractor: "projectAssigned" },
+  submitted_for_review: { client: "projectUpdates", admin: "contractorActivity" },
+  revision_requested:   { contractor: "revisionRequests", admin: "clientActivity", client: "projectUpdates" },
+  project_approved:     { admin: "clientActivity", contractor: "projectAssigned" },
+  marked_ready_to_post: { admin: "clientActivity", client: "projectUpdates" },
+  marked_as_posted:     { client: "projectUpdates", contractor: "projectAssigned", admin: "clientActivity" },
+  new_comment:          { client: "projectUpdates", contractor: "revisionRequests", admin: "clientActivity" },
+};
+
+// Fetches role + preferences for a list of user IDs.
+async function fetchRecipientProfiles(userIds) {
+  if (!userIds?.length) return [];
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, role, notification_preferences")
+    .in("id", userIds);
+  if (error) throw error;
+  return data || [];
+}
+
+// Filters a list of profiles to those who have the preference enabled.
+// prefKeyByRole: { role: preferenceKey } — if a role has no key, always include them.
+// Defaults to true when the preference key is absent (new users get everything).
+function filterByPref(profiles, prefKeyByRole) {
+  return profiles
+    .filter((p) => {
+      const key = prefKeyByRole[p.role];
+      if (!key) return true;
+      const prefs = p.notification_preferences || {};
+      return prefs[key] !== false;
+    })
+    .map((p) => p.id);
+}
 
 // ─── Fetch all notifications for a user ───
 export async function fetchNotifications(userId) {
@@ -148,7 +187,16 @@ export async function notifyProjectEvent({ event, project, actorName, recipientI
   const msg = messages[event];
   if (!msg || !recipientIds?.length) return;
 
-  const notifications = recipientIds.map((userId) => ({
+  // Filter recipients by their notification preferences for this event.
+  const prefKeyByRole = EVENT_PREF_MAP[event] || {};
+  let filteredIds = recipientIds;
+  if (Object.keys(prefKeyByRole).length > 0) {
+    const profiles = await fetchRecipientProfiles(recipientIds);
+    filteredIds = filterByPref(profiles, prefKeyByRole);
+  }
+  if (!filteredIds.length) return;
+
+  const notifications = filteredIds.map((userId) => ({
     user_id: userId,
     title: msg.title,
     message: msg.message,
@@ -157,4 +205,23 @@ export async function notifyProjectEvent({ event, project, actorName, recipientI
   }));
 
   return createBulkNotifications(notifications);
+}
+
+// ─── Notify a contractor when a payment is sent ───
+export async function notifyPaymentReceived({ contractorId, amount, currency }) {
+  const profiles = await fetchRecipientProfiles([contractorId]);
+  const prefs = profiles[0]?.notification_preferences || {};
+  if (prefs.paymentReceived === false) return;
+
+  const formatted = new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amount / 100);
+
+  return createNotification({
+    userId: contractorId,
+    title: "Payment Received",
+    message: `${formatted} has been sent to your Stripe account.`,
+    type: "project_update",
+  });
 }

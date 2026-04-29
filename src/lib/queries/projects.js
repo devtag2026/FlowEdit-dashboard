@@ -35,10 +35,6 @@ export async function fetchContractorProjects(userId) {
     (legacyResult.value.data || []).forEach((r) => projectIds.add(r.id));
   }
 
-  console.debug("[fetchContractorProjects] userId:", userId);
-  console.debug("[fetchContractorProjects] assignments raw:", assignResult.value?.data, "err:", assignResult.value?.error?.message);
-  console.debug("[fetchContractorProjects] roleMap:", Object.fromEntries(roleMap));
-  console.debug("[fetchContractorProjects] resolved IDs:", [...projectIds]);
 
   if (projectIds.size === 0) return [];
 
@@ -49,9 +45,7 @@ export async function fetchContractorProjects(userId) {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  const result = (data || []).map((p) => ({ ...p, my_role: roleMap.get(p.id) || null }));
-  console.debug("[fetchContractorProjects] final:", result.map((p) => ({ id: p.id, title: p.title, my_role: p.my_role })));
-  return result;
+  return (data || []).map((p) => ({ ...p, my_role: roleMap.get(p.id) || null }));
 }
 
 // ─── ADMIN: Fetch all projects ───
@@ -83,7 +77,7 @@ export async function fetchProjectById(id) {
         contractor:profiles!contractor_id(id, name, email, avatar_url)
       ),
       comments:project_comments(
-        id, content, created_at,
+        id, content, timecode, created_at,
         author:profiles!author_id(id, name, avatar_url, role)
       ),
       versions:project_versions(
@@ -102,7 +96,7 @@ export async function fetchProjectById(id) {
         client:profiles!client_id(id, name, email, avatar_url),
         contractor:profiles!contractor_id(id, name, email, avatar_url),
         comments:project_comments(
-          id, content, created_at,
+          id, content, timecode, created_at,
           author:profiles!author_id(id, name, avatar_url, role)
         ),
         versions:project_versions(
@@ -113,9 +107,13 @@ export async function fetchProjectById(id) {
       .eq("id", id)
       .single());
     if (error) throw error;
-    return { ...data, assignments: [] };
+    data = { ...data, assignments: [] };
   }
 
+  // Sort versions latest-first so project.versions[0] is always the most recent upload
+  if (data.versions) {
+    data.versions = [...data.versions].sort((a, b) => b.version_number - a.version_number);
+  }
   return data;
 }
 
@@ -277,6 +275,28 @@ export async function adminSendToRevision(id) {
   return updateProjectStatus(id, "revision");
 }
 
+// ─── ADMIN: Delete old version files from storage after posting ───
+// Keeps the latest version's file; removes all older ones from project-videos bucket.
+// DB rows are intentionally kept as audit trail.
+export async function cleanupOldVersionFiles(versions) {
+  if (!versions || versions.length <= 1) return;
+
+  const oldVersions = versions.slice(1); // versions sorted DESC, index 0 is latest
+  const paths = oldVersions
+    .map((v) => {
+      if (!v.video_url) return null;
+      const marker = "/project-videos/";
+      const idx = v.video_url.indexOf(marker);
+      return idx !== -1 ? v.video_url.slice(idx + marker.length) : null;
+    })
+    .filter(Boolean);
+
+  if (paths.length === 0) return;
+
+  const { error } = await supabase.storage.from("project-videos").remove(paths);
+  if (error) console.error("Storage cleanup failed:", error);
+}
+
 // ─── ADMIN: Mark as posted ───
 export async function markPosted(id, publishedUrl) {
   const { data, error } = await supabase
@@ -316,7 +336,7 @@ export async function fetchComments(projectId) {
   const { data, error } = await supabase
     .from("project_comments")
     .select(`
-      id, content, created_at,
+      id, content, timecode, created_at,
       author:profiles!author_id(id, name, avatar_url, role)
     `)
     .eq("project_id", projectId)
@@ -326,12 +346,12 @@ export async function fetchComments(projectId) {
   return data;
 }
 
-export async function addComment(projectId, authorId, content) {
+export async function addComment(projectId, authorId, content, timecode = null) {
   const { data, error } = await supabase
     .from("project_comments")
-    .insert({ project_id: projectId, author_id: authorId, content })
+    .insert({ project_id: projectId, author_id: authorId, content, timecode })
     .select(`
-      id, content, created_at,
+      id, content, timecode, created_at,
       author:profiles!author_id(id, name, avatar_url, role)
     `)
     .single();

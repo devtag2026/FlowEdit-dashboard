@@ -41,13 +41,13 @@ const navigationConfig = {
     { name: "Users", href: "/dashboard/admin/users", icon: UserCog },
     { name: "Payouts", href: "/dashboard/admin/contractors", icon: DollarSign },
     { name: "Contracts", href: "/dashboard/admin/contracts", icon: FileText },
-    { name: "Clients", href: "/dashboard/admin/clients", icon: Users },
+    // { name: "Clients", href: "/dashboard/admin/clients", icon: Users },
   ],
   contractor: [
     { name: "Dashboard", href: "/dashboard/contractor", icon: House },
     { name: "Earnings", href: "/dashboard/contractor/earnings", icon: DollarSign },
     { name: "Contracts", href: "/dashboard/contractor/contracts", icon: FileText },
-    { name: "Resources", href: "/dashboard/contractor/resources", icon: FolderOpen },
+    // { name: "Resources", href: "/dashboard/contractor/resources", icon: FolderOpen },
     { name: "Notifications", href: "/dashboard/contractor/notification", icon: Bell },
   ],
 };

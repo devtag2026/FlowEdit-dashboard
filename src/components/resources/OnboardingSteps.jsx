@@ -30,11 +30,11 @@ const OnboardingSteps = ({ steps }) => {
               <div
                 className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-[8px] md:text-xs font-bold mb-1 transition-all ${
                   step.completed
-                    ? "bg-primary text-white"           // ✅ completed — filled purple
+                    ? "bg-primary text-white"           // completed — filled purple
                     : "bg-white border-2 border-gray-300 text-gray-400" // incomplete — white circle
                 }`}
               >
-                {step.completed ? "✓" : index + 1}    {/* ✅ index+1 not step.id (UUID) */}
+                {step.completed ? "✓" : index + 1}
               </div>
               <span className="text-[8px] md:text-xs text-accent text-center leading-tight">
                 {step.label}

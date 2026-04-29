@@ -1,8 +1,7 @@
 "use client";
-import React, { useState } from "react";
-import { X, Loader2, Link as LinkIcon } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { X, Loader2, Upload, FileVideo } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -13,6 +12,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { createVersion } from "@/lib/queries/projects";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 export default function UploadVersionModal({
   isOpen,
@@ -21,25 +21,54 @@ export default function UploadVersionModal({
   uploaderId,
   onVersionCreated,
 }) {
-  const [videoUrl, setVideoUrl] = useState("");
+  const [file, setFile] = useState(null);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const selected = e.target.files?.[0] ?? null;
+    setFile(selected);
+    setError(null);
+  };
 
   const handleSubmit = async () => {
-    if (!videoUrl.trim() || !uploaderId) return;
+    if (!file || !uploaderId) return;
     setIsSubmitting(true);
     setError(null);
+    setUploadProgress(0);
 
     try {
+      const supabase = getSupabaseClient();
+      const ext = file.name.split(".").pop();
+      const path = `${projectId}/${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("project-videos")
+        .upload(path, file, { upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      setUploadProgress(80);
+
+      const { data: urlData } = supabase.storage
+        .from("project-videos")
+        .getPublicUrl(path);
+
+      const video_url = urlData.publicUrl;
+
       await createVersion(projectId, {
-        video_url: videoUrl.trim(),
+        video_url,
         notes: notes.trim() || null,
         uploaded_by: uploaderId,
       });
 
-      setVideoUrl("");
+      setUploadProgress(100);
+      setFile(null);
       setNotes("");
+      fileInputRef.current && (fileInputRef.current.value = "");
       setIsOpen(false);
       onVersionCreated?.();
     } catch (err) {
@@ -47,6 +76,7 @@ export default function UploadVersionModal({
       setError(err.message || "Failed to upload version. Please try again.");
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(0);
     }
   };
 
@@ -71,25 +101,63 @@ export default function UploadVersionModal({
             </DialogClose>
           </div>
           <DialogDescription className="text-sm font-onest text-accent/60 mt-1">
-            Paste the video link and add any notes for this version
+            Select a video file to upload for this version
           </DialogDescription>
         </DialogHeader>
 
         <div className="px-6 pb-6 space-y-4">
           <div>
             <label className="text-sm font-semibold text-accent mb-1.5 block">
-              Video URL <span className="text-danger">*</span>
+              Video File <span className="text-danger">*</span>
             </label>
-            <div className="relative">
-              <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/40" />
-              <Input
-                placeholder="Paste video link (Google Drive, Frame.io, etc.)"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                className="pl-10 h-12 border-accent/20 text-accent placeholder:text-accent/40 focus:border-primary focus:ring-primary"
+            <div
+              onClick={() => !isSubmitting && fileInputRef.current?.click()}
+              className={`
+                border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition
+                ${file ? "border-primary/50 bg-primary/5" : "border-accent/20 hover:border-primary/40 hover:bg-primary/5"}
+                ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}
+              `}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={isSubmitting}
               />
+              {file ? (
+                <div className="flex items-center justify-center gap-3">
+                  <FileVideo className="w-6 h-6 text-primary shrink-0" />
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-accent truncate max-w-[220px]">{file.name}</p>
+                    <p className="text-xs text-accent/50">{(file.size / (1024 * 1024)).toFixed(1)} MB</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="w-8 h-8 text-accent/30" />
+                  <p className="text-sm text-accent/60">Click to select a video file</p>
+                  <p className="text-xs text-accent/40">MP4, MOV, MKV and others supported</p>
+                </div>
+              )}
             </div>
           </div>
+
+          {isSubmitting && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-accent/60">
+                <span>Uploading…</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="h-1.5 bg-accent/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress || 20}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="text-sm font-semibold text-accent mb-1.5 block">
@@ -99,6 +167,7 @@ export default function UploadVersionModal({
               placeholder="What changed in this version..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              disabled={isSubmitting}
               className="bg-white border-accent/20 text-accent placeholder:text-accent/40 resize-none min-h-[80px]"
             />
           </div>
@@ -111,13 +180,13 @@ export default function UploadVersionModal({
 
           <Button
             onClick={handleSubmit}
-            disabled={!videoUrl.trim() || isSubmitting}
+            disabled={!file || isSubmitting}
             className="w-full bg-primary text-white font-onest font-semibold hover:bg-primary/90 h-11 disabled:opacity-50"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Uploading...
+                Uploading…
               </>
             ) : (
               "Upload Version"

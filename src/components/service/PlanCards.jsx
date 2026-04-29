@@ -84,26 +84,19 @@ const PlanCards = ({ profile }) => {
         </p>
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1 max-w-5xl mx-auto my-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto my-6">
         {plans.map((plan) => {
-          const planLevel = planOrder[plan.key];
           const isCurrent = plan.key === currentPlan;
-          const isUpgradeable = planLevel > currentOrder;
-          const isDowngrade = planLevel < currentOrder;
           const planStatus = profile?.subscription_status || "none";
 
-          let buttonText = "Select Plan";
+          let buttonText = null;
           let buttonDisabled = false;
 
           if (isCurrent) {
             buttonText = "Current Plan";
             buttonDisabled = true;
           } else if (planStatus !== "active") {
-            buttonText = "Activate via Checkout";
-          } else if (isUpgradeable) {
-            buttonText = `Upgrade to ${plan.title}`;
-          } else if (isDowngrade) {
-            buttonText = `Downgrade to ${plan.title}`;
+            buttonText = "Get Started";
           }
 
           return (

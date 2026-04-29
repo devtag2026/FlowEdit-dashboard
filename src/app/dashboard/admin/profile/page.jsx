@@ -8,12 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Loader2,
-  ShieldCheck,
   CheckCircle2,
   AlertCircle,
   Bell,
   User,
-  BellOff,
   LayoutDashboard,
   Users,
   Megaphone,
@@ -33,7 +31,6 @@ const DEFAULT_NOTIF = {
   clientActivity: true,
   broadcastActivity: false,
   emailNotifications: true,
-  browserNotifications: false,
 };
 
 const NOTIF_OPTIONS = [
@@ -62,12 +59,6 @@ const NOTIF_OPTIONS = [
     label: "Email Notifications",
     description: "Receive email digests for account activity.",
   },
-  {
-    key: "browserNotifications",
-    label: "Browser Notifications",
-    description: "Show push notifications in your browser for critical events.",
-    requiresPermission: true,
-  },
 ];
 
 function formatMemberSince(dateStr) {
@@ -77,19 +68,6 @@ function formatMemberSince(dateStr) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-async function requestBrowserPermission() {
-  if (!("Notification" in window)) return false;
-  if (Notification.permission === "granted") return true;
-  if (Notification.permission === "denied") return false;
-  const result = await Notification.requestPermission();
-  return result === "granted";
-}
-
-function showBrowserNotification(title, body) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  new Notification(title, { body, icon: "/favicon.ico" });
 }
 
 const InlineFeedback = ({ msg }) => {
@@ -115,7 +93,6 @@ export default function AdminAccountSettings() {
   const [notifications, setNotifications] = useState(DEFAULT_NOTIF);
   const [savingKey, setSavingKey]         = useState(null);
   const [notifMsgs, setNotifMsgs]         = useState({});
-  const [browserPermission, setBrowserPermission] = useState("default");
   const [avatarImgError, setAvatarImgError] = useState(false);
 
   const {
@@ -153,11 +130,6 @@ export default function AdminAccountSettings() {
 
   useEffect(() => {
     load();
-    if (!("Notification" in window)) {
-      setBrowserPermission("unsupported");
-    } else {
-      setBrowserPermission(Notification.permission);
-    }
   }, [load]);
 
   const onSubmitProfile = async (data) => {
@@ -177,29 +149,6 @@ export default function AdminAccountSettings() {
   };
 
   const handleToggle = async (key, checked) => {
-    if (key === "browserNotifications") {
-      if (checked) {
-        if (browserPermission === "unsupported") {
-          setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: "Not supported in this browser." } }));
-          setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 3000);
-          return;
-        }
-        if (browserPermission === "denied") {
-          setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: "Blocked — enable in browser site settings." } }));
-          setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 5000);
-          return;
-        }
-        const granted = await requestBrowserPermission();
-        setBrowserPermission(granted ? "granted" : "denied");
-        if (!granted) {
-          setNotifMsgs((p) => ({ ...p, [key]: { type: "error", text: "Permission denied." } }));
-          setTimeout(() => setNotifMsgs((p) => ({ ...p, [key]: null })), 5000);
-          return;
-        }
-        showBrowserNotification("Notifications enabled", "You'll now receive admin browser notifications.");
-      }
-    }
-
     const next = { ...notifications, [key]: checked };
     setNotifications(next);
     try {
@@ -294,12 +243,6 @@ export default function AdminAccountSettings() {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 bg-primary/5 border border-primary/15 rounded-2xl px-4 py-3.5">
-              <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-              <p className="text-xs text-accent/70 leading-relaxed">
-                Signed in via <strong>Google OAuth</strong>. Your email is managed by Google and cannot be changed here.
-              </p>
-            </div>
           </div>
 
           {/* Main column */}
@@ -372,28 +315,12 @@ export default function AdminAccountSettings() {
               <div className="divide-y divide-accent/8">
                 {NOTIF_OPTIONS.map(({ key, label, description }) => {
                   const isDisabled = savingKey === key;
-                  const isBrowser  = key === "browserNotifications";
-                  const blocked    = isBrowser && browserPermission === "denied";
-                  const unsupported = isBrowser && browserPermission === "unsupported";
 
                   return (
                     <div key={key} className="flex items-start justify-between gap-4 py-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium text-accent">{label}</p>
-                          {blocked && (
-                            <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                              <BellOff className="w-3 h-3" /> Blocked
-                            </span>
-                          )}
-                          {unsupported && (
-                            <span className="text-xs text-accent/40 bg-accent/8 px-2 py-0.5 rounded-full">Not supported</span>
-                          )}
-                        </div>
+                        <p className="text-sm font-medium text-accent">{label}</p>
                         <p className="text-xs text-accent/50 mt-0.5">{description}</p>
-                        {blocked && (
-                          <p className="text-xs text-amber-600 mt-1">Enable notifications in your browser&apos;s site settings.</p>
-                        )}
                         {notifMsgs[key] && (
                           <p className={`text-xs mt-1.5 flex items-center gap-1 ${notifMsgs[key].type === "success" ? "text-green-600" : "text-red-500"}`}>
                             {notifMsgs[key].type === "success"
@@ -408,7 +335,7 @@ export default function AdminAccountSettings() {
                         <Switch
                           checked={notifications[key]}
                           onCheckedChange={(checked) => handleToggle(key, checked)}
-                          disabled={isDisabled || unsupported}
+                          disabled={isDisabled}
                           className="data-[state=checked]:bg-primary"
                         />
                       </div>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createPayment } from "@/lib/queries/earnings";
 import { fetchProfile } from "@/lib/queries/profile";
+import { notifyPaymentReceived } from "@/lib/queries/notifications";
 
 const CURRENCIES = ["gbp", "usd", "eur"];
 
@@ -30,6 +31,11 @@ const PayContractorModal = ({ contractor, onClose, onSuccess }) => {
         currency:     form.currency,
         description:  form.description.trim() || null,
       });
+      notifyPaymentReceived({
+        contractorId: contractor.id,
+        amount:       amountPence,
+        currency:     form.currency,
+      }).catch(console.error);
       onSuccess?.();
       onClose();
     } catch (err) {

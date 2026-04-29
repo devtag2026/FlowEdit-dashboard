@@ -16,7 +16,6 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// Strip HTML tags for list preview — full HTML renders in NotificationDetail
 function stripHtml(html) {
   if (!html) return "";
   return html
@@ -32,7 +31,19 @@ function stripHtml(html) {
 const typeToIcon = {
   project_update: Clock,
   assignment:     UserCheck,
-  broadcast:      Megaphone,   // ← broadcast icon
+  broadcast:      Megaphone,
+};
+
+const typeIconBg = {
+  project_update: "bg-primary/10",
+  assignment:     "bg-blue-50",
+  broadcast:      "bg-amber-50",
+};
+
+const typeIconColor = {
+  project_update: "text-primary",
+  assignment:     "text-blue-500",
+  broadcast:      "text-amber-500",
 };
 
 const NotificationBar = ({
@@ -42,64 +53,68 @@ const NotificationBar = ({
   selectedId,
 }) => {
   return (
-    <div className="space-y-3 mt-4">
+    <div className="mt-4 overflow-y-auto max-h-[calc(100vh-280px)] space-y-2 pr-1 nice-scrollbar">
       {notifications.map((notification) => {
-        const Icon      = typeToIcon[notification.type] || MessageCircle;
+        const Icon     = typeToIcon[notification.type] || MessageCircle;
         const isSelected = selectedId === notification.id;
-        // Plain text preview — no HTML tags in the list
-        const preview   = stripHtml(notification.message);
+        const isUnread = !notification.is_read;
+        const preview  = stripHtml(notification.message);
+        const iconBg   = typeIconBg[notification.type]    || "bg-primary/10";
+        const iconClr  = typeIconColor[notification.type] || "text-primary";
 
         return (
           <div key={notification.id}>
 
             {/* ── Desktop ── */}
             <div
-              className={`hidden lg:flex bg-white rounded-lg p-3 justify-between hover:bg-accent/10 cursor-pointer overflow-hidden ${
-                isSelected ? "ring-2 ring-primary/40" : ""
-              } ${!notification.is_read ? "border-l-4 border-l-primary" : ""}`}
+              className={`hidden lg:flex items-center gap-3 rounded-xl p-3 cursor-pointer transition-all duration-150
+                ${isSelected ? "bg-primary/10 ring-1 ring-primary/30" : "bg-white hover:bg-accent/5"}
+                ${isUnread ? "border-l-4 border-primary" : "border-l-4 border-transparent"}`}
               onClick={() => setSelectedNotification(notification)}
             >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="bg-primary p-3 rounded-full shrink-0">
-                  <Icon size={18} className="text-white" />
-                </div>
-
-                <div className="flex flex-col min-w-0">
-                  <h4 className={`text-accent text-lg mb-1 truncate ${!notification.is_read ? "font-bold" : "font-medium"}`}>
-                    {notification.title}
-                  </h4>
-                  {/* preview — HTML stripped, truncated */}
-                  <p className="text-slate-600 text-sm truncate">
-                    {preview}
-                  </p>
-                </div>
+              <div className={`p-2.5 rounded-full shrink-0 ${iconBg}`}>
+                <Icon size={15} className={iconClr} />
               </div>
 
-              <span className="text-xs text-slate-500 whitespace-nowrap ml-3 self-center">
-                {timeAgo(notification.created_at)}
-              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <h4 className={`text-accent text-sm truncate ${isUnread ? "font-bold" : "font-medium"}`}>
+                    {notification.title}
+                  </h4>
+                  <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
+                    {timeAgo(notification.created_at)}
+                  </span>
+                </div>
+                <p className="text-slate-500 text-xs truncate">{preview}</p>
+              </div>
+
+              {isUnread && (
+                <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+              )}
             </div>
 
             {/* ── Mobile ── */}
             <div
-              className={`lg:hidden bg-white rounded-xl p-4 flex flex-col hover:bg-gray-200 cursor-pointer ${
-                !notification.is_read ? "border-l-4 border-l-primary" : ""
-              }`}
+              className={`lg:hidden bg-white rounded-xl p-4 flex flex-col gap-1 cursor-pointer transition-colors
+                ${isUnread ? "border-l-4 border-primary" : "border-l-4 border-transparent"}
+                hover:bg-accent/5`}
               onClick={() => {
                 setSelectedNotification(notification);
                 setMobileDetailOpen(true);
               }}
             >
-              <span className="text-xs text-slate-600 whitespace-nowrap">
-                {timeAgo(notification.created_at)}
-              </span>
-              <h4 className={`text-accent text-lg mb-1 ${!notification.is_read ? "font-bold" : "font-medium"}`}>
-                {notification.title}
-              </h4>
-              {/* preview — HTML stripped, truncated */}
-              <p className="text-slate-600 text-sm truncate">
-                {preview}
-              </p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-full shrink-0 ${iconBg}`}>
+                    <Icon size={13} className={iconClr} />
+                  </div>
+                  <h4 className={`text-accent text-sm ${isUnread ? "font-bold" : "font-medium"}`}>
+                    {notification.title}
+                  </h4>
+                </div>
+                <span className="text-xs text-slate-400 shrink-0">{timeAgo(notification.created_at)}</span>
+              </div>
+              <p className="text-slate-500 text-xs truncate pl-9">{preview}</p>
             </div>
 
           </div>
@@ -107,8 +122,11 @@ const NotificationBar = ({
       })}
 
       {notifications.length === 0 && (
-        <div className="text-center py-12 text-accent/40 text-sm">
-          No notifications yet.
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-12 h-12 rounded-full bg-accent/5 flex items-center justify-center mb-3">
+            <Bell size={20} className="text-accent/30" />
+          </div>
+          <p className="text-accent/40 text-sm">No notifications yet.</p>
         </div>
       )}
     </div>

@@ -6,7 +6,7 @@ import { Link2, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { fetchConnectStatus, startConnectOnboarding } from "@/lib/queries/earnings";
 import { useSearchParams } from "next/navigation";
 
-// ✅ Accepts profile as prop — no internal fetchProfile() / getUser() call
+// Accepts profile as prop — no internal fetchProfile() / getUser() call
 const WalletSection = ({ profile }) => {
   const [connectStatus, setConnectStatus] = useState(null);
   const [loading, setConnecting]          = useState(false);
@@ -23,7 +23,7 @@ const WalletSection = ({ profile }) => {
     }
   }, [searchParams]);
 
-  // ✅ Only fetch connect status — profile already provided via prop
+  // Only fetch connect status — profile already provided via prop
   useEffect(() => {
     if (!profile?.id) return;
     fetchConnectStatus(profile.id)
@@ -50,9 +50,8 @@ const WalletSection = ({ profile }) => {
   const isConnected = connectStatus?.connected;
 
   const payoutInfo = [
-    { title: "Default Payout Method", value: isConnected ? "Stripe Express" : "—",       desc: isConnected ? "Connected via Stripe"          : "Not configured"          },
-    { title: "Payout Schedule",       value: isConnected ? "Automatic"      : "—",       desc: isConnected ? "Managed by Stripe"             : "Connect to enable"       },
-    { title: "Minimum Threshold",     value: "£1.00",                                    desc: "Auto-payout enabled"                                                     },
+    { title: "Default Payout Method", value: isConnected ? "Stripe Express" : "—", desc: isConnected ? "Connected via Stripe" : "Not configured" },
+    { title: "Payout Schedule",       value: isConnected ? "Manual"     : "—", desc: isConnected ? "Processed by admin"   : "Connect to enable" },
   ];
 
   if (loadingStatus) {
@@ -72,7 +71,7 @@ const WalletSection = ({ profile }) => {
           Wallet & Payment Details
         </h1>
         <p className="text-slate-700">
-          Manage your payout method and connect your Stripe account to receive earnings.
+          Connect your Stripe account so the admin can send your earnings directly to you.
         </p>
 
         {statusMsg && (
@@ -113,7 +112,7 @@ const WalletSection = ({ profile }) => {
           {isConnected ? (
             <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
               <CheckCircle className="w-4 h-4" />
-              Account ID: {connectStatus.stripe_connect_id}
+              Your Stripe account is set up and ready to receive payments.
             </div>
           ) : (
             <>
@@ -138,7 +137,7 @@ const WalletSection = ({ profile }) => {
           <h1 className="text-accent font-bold text-xl md:text-2xl mb-8">
             Payout Information
           </h1>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {payoutInfo.map((info) => (
               <Card key={info.title} className="bg-white border-0 rounded-3xl">
                 <CardContent className="flex flex-col gap-5">

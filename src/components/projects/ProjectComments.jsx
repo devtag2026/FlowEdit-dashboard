@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown, SendHorizontal } from "lucide-react";
+import { ChevronDown, SendHorizontal, Clock, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fetchComments, addComment, fetchUserProfile } from "@/lib/queries/projects";
@@ -22,10 +22,18 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export default function ProjectComments({ projectId, project }) {
+function formatTimecode(seconds) {
+  const s = Math.floor(seconds);
+  const m = Math.floor(s / 60);
+  const remaining = s % 60;
+  return `${m}:${String(remaining).padStart(2, "0")}`;
+}
+
+export default function ProjectComments({ projectId, project, videoRef }) {
   const [comments, setComments] = useState([]);
   const [profile, setProfile] = useState(null);
   const [message, setMessage] = useState("");
+  const [timecode, setTimecode] = useState(null);
   const [sending, setSending] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
   const [openSort, setOpenSort] = useState(false);
@@ -53,14 +61,19 @@ export default function ProjectComments({ projectId, project }) {
     { key: "oldest", label: "Oldest first" },
   ];
 
+  const handlePinTime = () => {
+    const t = videoRef?.current?.getCurrentTime() ?? null;
+    if (t !== null) setTimecode(t);
+  };
+
   const handleSendMessage = async () => {
     if (!message.trim() || !profile || sending) return;
     setSending(true);
     try {
-      const newComment = await addComment(projectId, profile.id, message.trim());
+      const newComment = await addComment(projectId, profile.id, message.trim(), timecode);
       setComments((prev) => [newComment, ...prev]);
       setMessage("");
-      // Notify other participants about the new comment
+      setTimecode(null);
       if (project) {
         const contractorIds = project.assignments?.length > 0
           ? [...new Set(project.assignments.map((a) => a.contractor_id))]
@@ -108,9 +121,7 @@ export default function ProjectComments({ projectId, project }) {
                   className="w-full px-4 py-2 text-left hover:bg-gray-100 flex justify-between items-center"
                 >
                   {opt.label}
-                  {sortBy === opt.key && (
-                    <span className="text-primary">✓</span>
-                  )}
+                  {sortBy === opt.key && <span className="text-primary">✓</span>}
                 </button>
               ))}
             </div>
@@ -119,6 +130,20 @@ export default function ProjectComments({ projectId, project }) {
       </div>
 
       <div className="pb-6">
+        {timecode !== null && (
+          <div className="flex items-center gap-1 mb-2">
+            <span className="text-[11px] font-mono bg-primary/10 text-primary px-2 py-0.5 rounded">
+              @ {formatTimecode(timecode)}
+            </span>
+            <button
+              onClick={() => setTimecode(null)}
+              className="text-accent/40 hover:text-accent/80"
+              aria-label="Remove timecode"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <div className="relative">
           <Input
             placeholder="Add a comment..."
@@ -130,6 +155,16 @@ export default function ProjectComments({ projectId, project }) {
           />
 
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {videoRef && (
+              <button
+                onClick={handlePinTime}
+                disabled={sending}
+                title="Pin to current video time"
+                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 text-accent/50 hover:text-primary transition-colors"
+              >
+                <Clock className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleSendMessage}
               disabled={sending}
@@ -184,6 +219,14 @@ export default function ProjectComments({ projectId, project }) {
                   </div>
 
                   <p className="text-gray-700 text-sm md:text-base leading-relaxed">
+                    {comment.timecode != null && (
+                      <button
+                        onClick={() => videoRef?.current?.seekTo(comment.timecode)}
+                        className="text-[11px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded mr-1 hover:bg-primary/20 transition-colors"
+                      >
+                        [{formatTimecode(comment.timecode)}]
+                      </button>
+                    )}
                     {comment.content}
                   </p>
                 </div>
