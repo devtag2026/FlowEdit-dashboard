@@ -77,7 +77,7 @@ export async function fetchProjectById(id) {
         contractor:profiles!contractor_id(id, name, email, avatar_url)
       ),
       comments:project_comments(
-        id, content, timecode, created_at,
+        id, content, timecode, project_version_id, created_at,
         author:profiles!author_id(id, name, avatar_url, role)
       ),
       versions:project_versions(
@@ -96,7 +96,7 @@ export async function fetchProjectById(id) {
         client:profiles!client_id(id, name, email, avatar_url),
         contractor:profiles!contractor_id(id, name, email, avatar_url),
         comments:project_comments(
-          id, content, timecode, created_at,
+          id, content, timecode, project_version_id, created_at,
           author:profiles!author_id(id, name, avatar_url, role)
         ),
         versions:project_versions(
@@ -332,26 +332,43 @@ export async function approveProject(id, userId) {
 }
 
 // ─── COMMENTS ───
-export async function fetchComments(projectId) {
-  const { data, error } = await supabase
+export async function fetchComments(projectId, projectVersionId = null) {
+  let query = supabase
     .from("project_comments")
     .select(`
-      id, content, timecode, created_at,
+      id, content, timecode, project_version_id, created_at,
       author:profiles!author_id(id, name, avatar_url, role)
     `)
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: false });
+    .eq("project_id", projectId);
+
+  query = projectVersionId
+    ? query.or(`project_version_id.eq.${projectVersionId},project_version_id.is.null`)
+    : query.is("project_version_id", null);
+
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) throw error;
   return data;
 }
 
-export async function addComment(projectId, authorId, content, timecode = null) {
+export async function addComment(
+  projectId,
+  authorId,
+  content,
+  timecode = null,
+  projectVersionId = null
+) {
   const { data, error } = await supabase
     .from("project_comments")
-    .insert({ project_id: projectId, author_id: authorId, content, timecode })
+    .insert({
+      project_id: projectId,
+      author_id: authorId,
+      content,
+      timecode,
+      project_version_id: projectVersionId,
+    })
     .select(`
-      id, content, timecode, created_at,
+      id, content, timecode, project_version_id, created_at,
       author:profiles!author_id(id, name, avatar_url, role)
     `)
     .single();

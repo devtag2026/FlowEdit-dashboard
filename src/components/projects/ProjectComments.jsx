@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ChevronDown, SendHorizontal, Clock, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { ChevronDown, Clock, SendHorizontal, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { fetchComments, addComment, fetchUserProfile } from "@/lib/queries/projects";
+import { Input } from "@/components/ui/input";
 import { notifyProjectEvent } from "@/lib/queries/notifications";
+import {
+  addComment,
+  fetchComments,
+  fetchUserProfile,
+} from "@/lib/queries/projects";
 
 function timeAgo(dateStr) {
   const now = new Date();
@@ -29,7 +33,20 @@ function formatTimecode(seconds) {
   return `${m}:${String(remaining).padStart(2, "0")}`;
 }
 
-export default function ProjectComments({ projectId, project, videoRef }) {
+const EDITOR_ROLE_LABELS = {
+  offline_editor:   "Offline Editor",
+  primary_editor:   "Primary Editor",
+  finishing_editor: "Finishing Editor",
+};
+
+export default function ProjectComments({
+  projectId,
+  project,
+  videoRef,
+  projectVersionId = null,
+  hasVideo = false,
+  isArchived = false,
+}) {
   const [comments, setComments] = useState([]);
   const [profile, setProfile] = useState(null);
   const [message, setMessage] = useState("");
@@ -41,18 +58,24 @@ export default function ProjectComments({ projectId, project, videoRef }) {
   useEffect(() => {
     async function load() {
       const [commentsData, userProfile] = await Promise.all([
-        fetchComments(projectId),
+        fetchComments(projectId, projectVersionId),
         fetchUserProfile(),
       ]);
       setComments(commentsData || []);
       setProfile(userProfile);
     }
     load();
-  }, [projectId]);
+  }, [projectId, projectVersionId]);
+
+  useEffect(() => {
+    if (!hasVideo || !projectVersionId) setTimecode(null);
+  }, [hasVideo, projectVersionId]);
 
   const sortedComments = [...comments].sort((a, b) => {
-    if (sortBy === "newest") return new Date(b.created_at) - new Date(a.created_at);
-    if (sortBy === "oldest") return new Date(a.created_at) - new Date(b.created_at);
+    if (sortBy === "newest")
+      return new Date(b.created_at) - new Date(a.created_at);
+    if (sortBy === "oldest")
+      return new Date(a.created_at) - new Date(b.created_at);
     return 0;
   });
 
@@ -62,6 +85,7 @@ export default function ProjectComments({ projectId, project, videoRef }) {
   ];
 
   const handlePinTime = () => {
+    if (!hasVideo || !projectVersionId) return;
     const t = videoRef?.current?.getCurrentTime() ?? null;
     if (t !== null) setTimecode(t);
   };
@@ -70,17 +94,33 @@ export default function ProjectComments({ projectId, project, videoRef }) {
     if (!message.trim() || !profile || sending) return;
     setSending(true);
     try {
-      const newComment = await addComment(projectId, profile.id, message.trim(), timecode);
+      const newComment = await addComment(
+        projectId,
+        profile.id,
+        message.trim(),
+        timecode,
+        projectVersionId,
+      );
       setComments((prev) => [newComment, ...prev]);
       setMessage("");
       setTimecode(null);
       if (project) {
-        const contractorIds = project.assignments?.length > 0
-          ? [...new Set(project.assignments.map((a) => a.contractor_id))]
-          : project.contractor_id ? [project.contractor_id] : [];
-        const recipientIds = [project.client_id, ...contractorIds].filter((id) => id && id !== profile.id);
+        const contractorIds =
+          project.assignments?.length > 0
+            ? [...new Set(project.assignments.map((a) => a.contractor_id))]
+            : project.contractor_id
+              ? [project.contractor_id]
+              : [];
+        const recipientIds = [project.client_id, ...contractorIds].filter(
+          (id) => id && id !== profile.id,
+        );
         if (recipientIds.length) {
-          notifyProjectEvent({ event: "new_comment", project, actorName: profile.name, recipientIds }).catch(console.error);
+          notifyProjectEvent({
+            event: "new_comment",
+            project,
+            actorName: profile.name,
+            recipientIds,
+          }).catch(console.error);
         }
       }
     } catch (err) {
@@ -99,6 +139,7 @@ export default function ProjectComments({ projectId, project, videoRef }) {
 
         <div className="relative text-xs md:text-sm">
           <button
+            type="button"
             onClick={() => setOpenSort(!openSort)}
             className="flex items-center gap-1 text-gray-600 hover:text-black"
           >
@@ -113,6 +154,7 @@ export default function ProjectComments({ projectId, project, videoRef }) {
             <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg z-50 rounded-lg border border-accent/10">
               {options.map((opt) => (
                 <button
+                  type="button"
                   key={opt.key}
                   onClick={() => {
                     setSortBy(opt.key);
@@ -121,7 +163,9 @@ export default function ProjectComments({ projectId, project, videoRef }) {
                   className="w-full px-4 py-2 text-left hover:bg-gray-100 flex justify-between items-center"
                 >
                   {opt.label}
-                  {sortBy === opt.key && <span className="text-primary">✓</span>}
+                  {sortBy === opt.key && (
+                    <span className="text-primary">✓</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -130,50 +174,60 @@ export default function ProjectComments({ projectId, project, videoRef }) {
       </div>
 
       <div className="pb-6">
-        {timecode !== null && (
-          <div className="flex items-center gap-1 mb-2">
-            <span className="text-[11px] font-mono bg-primary/10 text-primary px-2 py-0.5 rounded">
-              @ {formatTimecode(timecode)}
-            </span>
-            <button
-              onClick={() => setTimecode(null)}
-              className="text-accent/40 hover:text-accent/80"
-              aria-label="Remove timecode"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-        <div className="relative">
-          <Input
-            placeholder="Add a comment..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-            className="text-sm md:text-base pr-20 py-5 border-0 border-b"
-            disabled={sending}
-          />
-
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            {videoRef && (
-              <button
-                onClick={handlePinTime}
-                disabled={sending}
-                title="Pin to current video time"
-                className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 text-accent/50 hover:text-primary transition-colors"
-              >
-                <Clock className="w-4 h-4" />
-              </button>
+        {isArchived ? (
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+            Comments are locked for previous versions. Switch to the latest version to comment.
+          </p>
+        ) : (
+          <>
+            {timecode !== null && (
+              <div className="flex items-center gap-1 mb-2">
+                <span className="text-[11px] font-mono bg-primary/10 text-primary px-2 py-0.5 rounded">
+                  @ {formatTimecode(timecode)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTimecode(null)}
+                  className="text-accent/40 hover:text-accent/80"
+                  aria-label="Remove timecode"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             )}
-            <button
-              onClick={handleSendMessage}
-              disabled={sending}
-              className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50"
-            >
-              <SendHorizontal className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+            <div className="relative">
+              <Input
+                placeholder="Add a comment..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                className="text-sm md:text-base pr-20 py-5 border-0 border-b"
+                disabled={sending}
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {hasVideo && projectVersionId && videoRef && (
+                  <button
+                    type="button"
+                    onClick={handlePinTime}
+                    disabled={sending}
+                    title="Pin to current video time"
+                    className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50 text-accent/50 hover:text-primary transition-colors"
+                  >
+                    <Clock className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSendMessage}
+                  disabled={sending}
+                  className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50"
+                >
+                  <SendHorizontal className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="space-y-5 overflow-y-auto pr-2 flex-1">
@@ -185,11 +239,18 @@ export default function ProjectComments({ projectId, project, videoRef }) {
           sortedComments.map((comment) => {
             const isYou = profile && comment.author?.id === profile.id;
             const roleBadge = {
-              client: { label: "Client", className: "bg-blue-100 text-blue-700" },
+              client:     { label: "Client", className: "bg-blue-100 text-blue-700" },
               contractor: { label: "Editor", className: "bg-purple-100 text-purple-700" },
-              admin: { label: "Admin", className: "bg-amber-100 text-amber-700" },
+              admin:      { label: "Admin",  className: "bg-amber-100 text-amber-700" },
             };
             const badge = roleBadge[comment.author?.role];
+            const assignmentRole = project?.assignments?.find(
+              (a) => a.contractor_id === comment.author?.id
+            )?.role;
+            const badgeLabel =
+              comment.author?.role === "contractor" && assignmentRole
+                ? (EDITOR_ROLE_LABELS[assignmentRole] ?? "Editor")
+                : badge?.label;
 
             return (
               <div key={comment.id} className="flex gap-3">
@@ -209,8 +270,10 @@ export default function ProjectComments({ projectId, project, videoRef }) {
                       {isYou ? "You" : comment.author?.name || "Unknown"}
                     </span>
                     {badge && (
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${badge.className}`}>
-                        {badge.label}
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${badge.className}`}
+                      >
+                        {badgeLabel}
                       </span>
                     )}
                     <span className="text-xs md:text-sm text-gray-500">
@@ -219,9 +282,12 @@ export default function ProjectComments({ projectId, project, videoRef }) {
                   </div>
 
                   <p className="text-gray-700 text-sm md:text-base leading-relaxed">
-                    {comment.timecode != null && (
+                    {comment.timecode != null && hasVideo && (
                       <button
-                        onClick={() => videoRef?.current?.seekTo(comment.timecode)}
+                        type="button"
+                        onClick={() =>
+                          videoRef?.current?.seekTo(comment.timecode)
+                        }
                         className="text-[11px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded mr-1 hover:bg-primary/20 transition-colors"
                       >
                         [{formatTimecode(comment.timecode)}]

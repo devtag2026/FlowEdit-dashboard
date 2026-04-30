@@ -10,9 +10,10 @@ export async function fetchAllUsers() {
       `
       id, name, email, avatar_url, role,
       subscription_plan, subscription_status,
-      stripe_connect_id, created_at,
+      stripe_connect_id, created_at, social_access,
       client_projects:projects!client_id(id, status),
-      contractor_projects:projects!contractor_id(id, status)
+      contractor_projects:projects!contractor_id(id, status),
+      assignment_entries:project_assignments!contractor_id(project_id, project:projects!project_id(id, status))
     `
     )
     .neq("role", "admin")
@@ -21,9 +22,16 @@ export async function fetchAllUsers() {
   if (error) throw error;
 
   return (data || []).map((user) => {
-    const clientProjects = user.client_projects || [];
+    const clientProjects     = user.client_projects || [];
     const contractorProjects = user.contractor_projects || [];
-    const allProjects = [...clientProjects, ...contractorProjects];
+    const legacyIds          = new Set(contractorProjects.map((p) => p.id));
+
+    // Projects from project_assignments not already counted via legacy contractor_id
+    const assignmentProjects = (user.assignment_entries || [])
+      .map((a) => a.project)
+      .filter((p) => p && !legacyIds.has(p.id));
+
+    const allProjects = [...clientProjects, ...contractorProjects, ...assignmentProjects];
 
     const activeProjects = allProjects.filter((p) =>
       ["submitted", "in_progress", "review", "revision"].includes(p.status)
@@ -46,6 +54,7 @@ export async function fetchAllUsers() {
       plan: user.subscription_plan || null,
       subscriptionStatus: user.subscription_status || null,
       stripeConnected: !!user.stripe_connect_id,
+      socialAccess: user.social_access || {},
       activeProjects,
       totalProjects,
       memberSince: user.created_at,

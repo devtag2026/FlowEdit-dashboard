@@ -1,25 +1,14 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { SocialCard } from "@/components/Social/SocialCard";
-import { Lock, Loader2 } from "lucide-react";
-import {
-  fetchSocialPlatforms,
-  upsertSocialPlatform,
-  disconnectSocialPlatform,
-} from "@/lib/queries/socials";
+import { ShieldCheck, Lock, Loader2, Tv2 } from "lucide-react";
+import { fetchSocialPlatforms } from "@/lib/queries/socials";
+import { fetchUserProfile } from "@/lib/queries/projects";
 
 const PLATFORM_META = {
   youtube: {
-    platform: "YouTube",
+    label: "YouTube",
     description: "Upload and publish videos directly to your YouTube channel.",
-    connectionNote:
-      "Uses native Google OAuth. FlowEdit never sees your password. Connecting is free. Auto-posting is unlocked on Growth and Pro plans.",
-    requirements: [
-      "A Google account",
-      "Permission to upload to the selected YouTube channel",
-    ],
     iconBgColor: "bg-[#ff0000]",
     icon: ({ className }) => (
       <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -28,15 +17,8 @@ const PLATFORM_META = {
     ),
   },
   instagram: {
-    platform: "Instagram",
-    description:
-      "Publish reels and posts to your linked Instagram Business account.",
-    connectionNote:
-      "Instagram posting requires a connected Facebook Page. Connecting is free. Auto-posting is unlocked on Growth and Pro plans.",
-    requirements: [
-      "A Facebook Page",
-      "An Instagram Professional account linked to that Page",
-    ],
+    label: "Instagram",
+    description: "Publish reels and posts to your Instagram Business account.",
     iconBgColor: "bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400",
     icon: ({ className }) => (
       <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -45,11 +27,8 @@ const PLATFORM_META = {
     ),
   },
   facebook: {
-    platform: "Facebook",
+    label: "Facebook",
     description: "Publish videos directly to your Facebook Page.",
-    connectionNote:
-      "Connection is required for Instagram publishing. FlowEdit can auto-post videos to this channel.",
-    requirements: ["A Facebook Page that you manage"],
     iconBgColor: "bg-[#1877f2]",
     icon: ({ className }) => (
       <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -58,14 +37,8 @@ const PLATFORM_META = {
     ),
   },
   tiktok: {
-    platform: "TikTok",
+    label: "TikTok",
     description: "Upload videos to TikTok with captions and metadata.",
-    connectionNote:
-      "Authorizes FlowEdit through TikTok's secure OAuth portal. Connecting is free. Auto-posting is unlocked on Growth and Pro plans.",
-    requirements: [
-      "TikTok login",
-      "Permission to upload videos to the selected account",
-    ],
     iconBgColor: "bg-black",
     icon: ({ className }) => (
       <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -77,27 +50,19 @@ const PLATFORM_META = {
 
 export default function SocialConnections() {
   const [platforms, setPlatforms] = useState([]);
+  const [socialAccess, setSocialAccess] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState(null);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await fetchSocialPlatforms();
-      setPlatforms(
-        data.map((row) => {
-          const meta = PLATFORM_META[row.platform] || {};
-          return {
-            ...meta,
-            ...row,
-            status: row.connected ? "connected" : "not-connected",
-            buttonText: row.connected
-              ? "Manage Connection"
-              : `Connect ${meta.platform}`,
-            buttonAction: () => handleToggle(row),
-          };
-        }),
-      );
+      const [platformData, profile] = await Promise.all([
+        fetchSocialPlatforms(),
+        fetchUserProfile(),
+      ]);
+      const access = profile?.social_access || {};
+      setSocialAccess(access);
+      setPlatforms(platformData);
     } catch (err) {
       console.error("Failed to load social platforms:", err);
     } finally {
@@ -109,78 +74,25 @@ export default function SocialConnections() {
     load();
   }, [load]);
 
-  const handleToggle = async (row) => {
-    try {
-      setSavingId(row.platform);
-      if (row.connected) {
-        await disconnectSocialPlatform(row.platform);
-      } else {
-        // v1 — manual tracking only, no real OAuth
-        await upsertSocialPlatform({
-          platform: row.platform,
-          handle: row.handle || null,
-          url: row.url || null,
-          connected: true,
-        });
-      }
-      await load();
-    } catch (err) {
-      console.error("Failed to toggle platform:", err);
-      alert("Failed to update connection. Please try again.");
-    } finally {
-      setSavingId(null);
-    }
-  };
+  const enabledPlatforms = platforms
+    .filter((p) => !!socialAccess?.[p.platform])
+    .map((p) => ({ ...p, ...(PLATFORM_META[p.platform] || {}) }));
 
-  // Rebuild buttonAction references after load so closures are fresh
-  const platformsWithActions = platforms.map((p) => ({
-    ...p,
-    buttonAction: () => handleToggle(p),
-    buttonText:
-      savingId === p.platform
-        ? "Saving..."
-        : p.connected
-          ? "Manage Connection"
-          : `Connect ${p.platform}`,
-  }));
+  const hasAnyAccess = socialAccess && Object.values(socialAccess).some(Boolean);
 
   return (
     <div className="min-h-screen p-6 bg-secondary">
       <div className="max-w-7xl mx-auto space-y-5">
-        {/* Header card */}
+        {/* Header */}
         <Card className="border rounded-3xl shadow-none bg-tertiary">
           <CardContent className="p-4 sm:p-6">
             <h1 className="text-xl sm:text-3xl text-accent font-bold font-onest mb-2 sm:mb-3">
               Social Connections
             </h1>
             <p className="text-sm sm:text-md font-extralight font-onest text-accent tracking-wide leading-relaxed max-w-3xl">
-              Connect your social accounts so FlowEdit can upload and publish
-              videos on your behalf. All connections use secure OAuth — FlowEdit
-              never sees your passwords.
+              The platforms below have been enabled for your account by your
+              admin. FlowEdit can post content to these channels on your behalf.
             </p>
-          </CardContent>
-        </Card>
-
-        {/* Upgrade banner */}
-        <Card className="border rounded-3xl shadow-none bg-tertiary">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-              <div className="flex-1">
-                <h3 className="text-xl sm:text-2xl text-accent font-bold font-onest mb-2">
-                  Publishing not included in your plan
-                </h3>
-                <p className="text-sm sm:text-md font-extralight font-onest text-accent tracking-wide leading-relaxed">
-                  Connect accounts now and upgrade to unlock automatic posting
-                  to YouTube, Instagram, Facebook, and TikTok.
-                </p>
-                <p className="text-xs text-slate-400 mt-2">
-                  Auto-posting is available on FlowEdit Growth and Pro plans
-                </p>
-              </div>
-              <Button className="w-full sm:w-auto bg-primary text-white font-bold px-6 h-11 rounded-2xl text-base sm:text-lg font-onest">
-                Upgrade Plan
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
@@ -189,35 +101,80 @@ export default function SocialConnections() {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-primary w-8 h-8" />
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {platformsWithActions.map((platform) => (
-              <SocialCard key={platform.platform} {...platform} />
-            ))}
-          </div>
-        )}
-
-        {/* Security card */}
-        <Card className="border rounded-3xl shadow-none bg-tertiary">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="bg-green-50 rounded-full p-2 sm:p-2.5 flex-shrink-0">
-                <Lock className="w-6 h-6 sm:w-10 sm:h-10 text-green-600" />
+        ) : !hasAnyAccess ? (
+          <Card className="border rounded-3xl shadow-none bg-tertiary">
+            <CardContent className="p-8 sm:p-12 flex flex-col items-center text-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center">
+                <Tv2 className="w-7 h-7 text-accent/40" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg sm:text-2xl text-accent font-onest mb-1 sm:mb-1.5">
-                  Security & Permissions
+                <h3 className="text-lg font-bold text-accent mb-1">
+                  No platforms configured
                 </h3>
-                <p className="text-sm font-light font-onest text-accent tracking-wide leading-relaxed">
-                  All social connections use Official APIs from Google, Meta,
-                  and TikTok. You can revoke access at any time from your social
-                  account settings. FlowEdit never stores your passwords — only
-                  secure access tokens with limited permissions.
+                <p className="text-sm text-accent/50 max-w-sm">
+                  No social platforms have been enabled for your account yet.
+                  Contact your admin to get started.
                 </p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {enabledPlatforms.map((p) => {
+              const Icon = p.icon;
+              return (
+                <div
+                  key={p.platform}
+                  className="bg-tertiary rounded-3xl p-5 flex flex-col gap-4 border border-accent/10"
+                >
+                  {/* Top row: icon + name + access badge */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`${p.iconBgColor} rounded-2xl w-12 h-12 shrink-0 flex items-center justify-center`}
+                      >
+                        {Icon && <Icon className="w-6 h-6 text-white" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-accent text-base leading-tight">
+                          {p.label}
+                        </p>
+                        <p className="text-xs text-accent/50 mt-0.5 leading-snug line-clamp-2">
+                          {p.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Admin access badge */}
+                    <div className="shrink-0 flex items-center gap-1.5 bg-green-50 text-green-600 border border-green-200 rounded-full px-2.5 py-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold whitespace-nowrap">
+                        Access Granted
+                      </span>
+                    </div>
+                  </div>
+
+                  {p.connected && (
+                    <>
+                      <div className="border-t border-accent/8" />
+                      <div className="flex items-center gap-2.5">
+                        <div>
+                          <p className="text-sm font-semibold text-accent">
+                            Connected
+                          </p>
+                          <p className="text-xs text-accent/50">
+                            FlowEdit is active on this channel
+                          </p>
+                        </div>
+                        <div className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

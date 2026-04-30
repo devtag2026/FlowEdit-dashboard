@@ -65,7 +65,10 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
     setSubmitError(null);
 
     try {
-      const assetLinks = data.cloudFolderLink.trim() ? [data.cloudFolderLink.trim()] : [];
+      const rawLink = data.cloudFolderLink.trim();
+      const assetLinks = rawLink
+        ? [rawLink.match(/^https?:\/\//) ? rawLink : `https://${rawLink}`]
+        : [];
 
       const newProject = await createProject({
         title: data.projectTitle,

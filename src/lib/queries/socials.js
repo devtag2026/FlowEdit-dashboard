@@ -64,6 +64,29 @@ export async function fetchAllClientsSocials() {
   return data || [];
 }
 
+export async function fetchClientSocialAccess(clientId) {
+  const defaults = { youtube: false, instagram: false, facebook: false, tiktok: false };
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("social_access")
+    .eq("id", clientId)
+    .single();
+  if (error) throw error;
+  return { ...defaults, ...(data?.social_access || {}) };
+}
+
+export async function updateClientSocialAccess(clientId, socialAccess) {
+  const res = await fetch("/api/admin/social-access", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId, socialAccess }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to update social access");
+  }
+}
+
 export async function disconnectSocialPlatform(platform) {
   const { data: { user } } = await getUser();
   if (!user) throw new Error("Not authenticated");

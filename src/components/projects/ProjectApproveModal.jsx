@@ -73,8 +73,7 @@ const ProjectApproveModal = ({ isOpen, onClose, onApprovalComplete }) => {
               </DialogClose>
             </div>
             <DialogDescription className="text-sm text-gray-500 text-left mt-1">
-              Are you sure you want to approve this project? The final video will
-              be added to your cloud storage folder.
+              Are you sure you want to approve this project? This will mark it as approved and notify your editor team.
             </DialogDescription>
           </DialogHeader>
 

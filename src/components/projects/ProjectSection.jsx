@@ -65,6 +65,7 @@ function ProjectSection({ projectId }) {
   const [error, setError] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState(null);
 
   // Client actions
   const [isRevising, setIsRevising] = useState(false);
@@ -95,6 +96,12 @@ function ProjectSection({ projectId }) {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Jump to the latest version whenever the version count changes (new upload)
+  // or when project first loads (selectedVersion starts as null)
+  useEffect(() => {
+    setSelectedVersion(project?.versions?.[0] ?? null);
+  }, [project?.versions?.length]);
 
   useEffect(() => {
     async function loadData() {
@@ -344,16 +351,38 @@ function ProjectSection({ projectId }) {
         <div className="grid grid-cols-1 h-full">
           <div className="p-3 md:p-6 space-y-4 overflow-hidden">
             {/* Video Player */}
-            <VideoPlayer ref={videoRef} src={latestVersion?.video_url ?? null} />
+            <VideoPlayer ref={videoRef} src={selectedVersion?.video_url ?? null} />
+
+            {/* Version indicator banner */}
+            {selectedVersion && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-accent">
+                  Version {selectedVersion.version_number}
+                </span>
+                {selectedVersion.id === latestVersion?.id ? (
+                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    Latest
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                      Older version · comments locked
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVersion(latestVersion)}
+                      className="text-xs text-primary font-semibold hover:underline"
+                    >
+                      Jump to latest →
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Version + Actions Bar */}
             <div className="flex flex-col md:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="text-sm md:text-lg font-semibold">
-                  {latestVersion
-                    ? `Version ${latestVersion.version_number}`
-                    : "No versions yet"}
-                </span>
                 {project.versions?.length > 0 && (
                   <button
                     onClick={() => setShowVersions((prev) => !prev)}
@@ -511,7 +540,15 @@ function ProjectSection({ projectId }) {
 
             {/* Version History */}
             {showVersions && project.versions?.length > 0 && (
-              <VersionHistory versions={project.versions} />
+              <VersionHistory
+                versions={project.versions}
+                selectedVersionId={selectedVersion?.id}
+                onSelectVersion={(v) => {
+                  setSelectedVersion(v);
+                  setShowVersions(false);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
             )}
 
             {/* Contractor: Posting Details */}
@@ -645,7 +682,14 @@ function ProjectSection({ projectId }) {
             )}
           </div>
 
-          <ProjectComments projectId={projectId} project={project} videoRef={videoRef} />
+          <ProjectComments
+            projectId={projectId}
+            project={project}
+            videoRef={videoRef}
+            projectVersionId={selectedVersion?.id ?? null}
+            hasVideo={!!selectedVersion?.video_url}
+            isArchived={selectedVersion?.id !== latestVersion?.id}
+          />
         </div>
       </CardContent>
 

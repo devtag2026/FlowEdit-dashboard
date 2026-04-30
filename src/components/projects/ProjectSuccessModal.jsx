@@ -36,7 +36,7 @@ const ProjectSuccessModal = ({ isOpen, onClose, onDone }) => {
 
           <h2 className="text-lg text-slate-900 font-bold mb-2">Success!</h2>
           <p className="text-sm text-gray-500 mb-4">
-            Your video will be added to your cloud storage folder shortly.
+            Your project has been approved. The final video will be delivered to you shortly.
           </p>
 
           <Button
