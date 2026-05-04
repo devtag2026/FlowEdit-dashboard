@@ -23,7 +23,7 @@ const statusColors = {
   rejected: "bg-red-100 text-red-700",
 };
 
-export default function VersionHistory({ versions, selectedVersionId, onSelectVersion }) {
+export default function VersionHistory({ versions, selectedVersionId, onSelectVersion, showInternal = false }) {
   if (!versions || versions.length === 0) return null;
 
   return (
@@ -49,17 +49,24 @@ export default function VersionHistory({ versions, selectedVersionId, onSelectVe
               }`}
             >
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                isSelected ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                version.is_internal
+                  ? isSelected ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-700"
+                  : isSelected ? "bg-primary text-white" : "bg-primary/10 text-primary"
               }`}>
-                {version.version_number}
+                {version.is_internal ? "I" : version.version_number}
               </div>
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-accent">
-                    Version {version.version_number}
+                    {version.is_internal ? "Internal Upload" : `Version ${version.version_number}`}
                   </span>
-                  {isLatest && (
+                  {showInternal && version.is_internal && (
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      Internal
+                    </span>
+                  )}
+                  {isLatest && !version.is_internal && (
                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                       Latest
                     </span>
