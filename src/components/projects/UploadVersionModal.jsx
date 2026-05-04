@@ -19,8 +19,10 @@ export default function UploadVersionModal({
   setIsOpen,
   projectId,
   uploaderId,
+  uploaderRole,
   onVersionCreated,
 }) {
+  const isInternal = uploaderRole !== "finishing_editor";
   const [file, setFile] = useState(null);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +65,7 @@ export default function UploadVersionModal({
         video_url,
         notes: notes.trim() || null,
         uploaded_by: uploaderId,
+        is_internal: isInternal,
       });
 
       setUploadProgress(100);
@@ -89,7 +92,7 @@ export default function UploadVersionModal({
         <DialogHeader className="px-6 pt-6 pb-4">
           <div className="relative">
             <DialogTitle className="text-xl font-bold font-onest text-accent">
-              Upload New Version
+              {isInternal ? "Upload Internal Version" : "Upload New Version"}
             </DialogTitle>
             <DialogClose asChild>
               <button
@@ -101,7 +104,9 @@ export default function UploadVersionModal({
             </DialogClose>
           </div>
           <DialogDescription className="text-sm font-onest text-accent/60 mt-1">
-            Select a video file to upload for this version
+            {isInternal
+              ? "Internal handoff — not visible to the client"
+              : "This version will be visible to the client for review"}
           </DialogDescription>
         </DialogHeader>
 

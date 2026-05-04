@@ -88,7 +88,7 @@ function BroadcastCard({ broadcast, isSelected, onClick }) {
 }
 
 export default function BroadcastsPage() {
-  const { broadcasts, loading } = useBroadcasts();
+  const { broadcasts, loading, reload } = useBroadcasts();
 
   const [creating, setCreating]                   = useState(false);
   const [activeFilter, setActiveFilter]           = useState("All");
@@ -136,6 +136,7 @@ export default function BroadcastsPage() {
     try {
       setCreating(true);
       await createBroadcast({ title, message, audience, scheduledFor });
+      reload();
       setNewBroadCast(false);
       setMobileDetailOpen(false);
     } catch (err) {
@@ -182,7 +183,7 @@ export default function BroadcastsPage() {
         </div>
 
         {/* ── Stats strip ── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             {
               label: "Total Broadcasts",
