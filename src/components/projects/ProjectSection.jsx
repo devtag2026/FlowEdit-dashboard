@@ -45,6 +45,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
@@ -97,10 +98,13 @@ function ProjectSection({ projectId }) {
     window.scrollTo(0, 0);
   }, []);
 
-  // Jump to the latest version whenever the version count changes (new upload)
-  // or when project first loads (selectedVersion starts as null)
+  // Jump to the latest visible version whenever version count changes or on first load
   useEffect(() => {
-    setSelectedVersion(project?.versions?.[0] ?? null);
+    const visible =
+      role === "client"
+        ? (project?.versions || []).filter((v) => !v.is_internal)
+        : (project?.versions || []);
+    setSelectedVersion(visible[0] ?? null);
   }, [project?.versions?.length]);
 
   useEffect(() => {
@@ -311,7 +315,12 @@ function ProjectSection({ projectId }) {
 
   const isApproved = project.status === "completed" || !!project.approved_at;
   const isPosted = project.status === "posted";
-  const latestVersion = project.versions?.length > 0 ? project.versions[0] : null;
+  // Clients only see official (non-internal) versions; admins/contractors see all
+  const visibleVersions =
+    role === "client"
+      ? (project.versions || []).filter((v) => !v.is_internal)
+      : (project.versions || []);
+  const latestVersion = visibleVersions.length > 0 ? visibleVersions[0] : null;
 
   // Derive this contractor's role on the project from assignments
   const myAssignment = project.assignments?.find((a) => a.contractor_id === profile?.id);
@@ -357,8 +366,15 @@ function ProjectSection({ projectId }) {
             {selectedVersion && (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold text-accent">
-                  Version {selectedVersion.version_number}
+                  {selectedVersion.is_internal
+                    ? "Internal Upload"
+                    : `Version ${selectedVersion.version_number}`}
                 </span>
+                {selectedVersion.is_internal && role !== "client" && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">
+                    Internal
+                  </span>
+                )}
                 {selectedVersion.id === latestVersion?.id ? (
                   <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                     Latest
@@ -383,12 +399,12 @@ function ProjectSection({ projectId }) {
             {/* Version + Actions Bar */}
             <div className="flex flex-col md:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                {project.versions?.length > 0 && (
+                {visibleVersions.length > 0 && (
                   <button
                     onClick={() => setShowVersions((prev) => !prev)}
                     className="text-xs text-primary font-semibold hover:underline cursor-pointer"
                   >
-                    {showVersions ? "Hide History" : `All Versions (${project.versions.length})`}
+                    {showVersions ? "Hide History" : `All Versions (${visibleVersions.length})`}
                   </button>
                 )}
               </div>
@@ -539,16 +555,86 @@ function ProjectSection({ projectId }) {
             </div>
 
             {/* Version History */}
-            {showVersions && project.versions?.length > 0 && (
+            {showVersions && visibleVersions.length > 0 && (
               <VersionHistory
-                versions={project.versions}
+                versions={visibleVersions}
                 selectedVersionId={selectedVersion?.id}
+                showInternal={role !== "client"}
                 onSelectVersion={(v) => {
                   setSelectedVersion(v);
                   setShowVersions(false);
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
               />
+            )}
+
+            {/* Editor Team — visible to admin and contractor */}
+            {role !== "client" && (project.assignments?.length > 0 || project.contractor_id) && (
+              <div className="bg-tertiary/60 rounded-xl p-5 border border-accent/20 space-y-3">
+                <h4 className="text-sm font-bold text-accent uppercase tracking-wide">
+                  Editor Team
+                </h4>
+                <div className="space-y-2">
+                  {project.assignments?.length > 0 ? (
+                    ["offline_editor", "primary_editor", "finishing_editor"].map((roleKey) => {
+                      const assignment = project.assignments.find((a) => a.role === roleKey);
+                      if (!assignment) return null;
+                      const roleLabels = {
+                        offline_editor: "Offline Editor",
+                        primary_editor: "Primary Editor",
+                        finishing_editor: "Finishing Editor",
+                      };
+                      return (
+                        <div key={roleKey} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-accent/10">
+                          <Avatar className="w-8 h-8 shrink-0">
+                            {assignment.contractor?.avatar_url ? (
+                              <AvatarImage src={assignment.contractor.avatar_url} />
+                            ) : (
+                              <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                                {assignment.contractor?.name?.[0] || "?"}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-accent truncate">
+                              {assignment.contractor?.name || "Unknown"}
+                            </p>
+                            <p className="text-xs text-accent/50 truncate">
+                              {assignment.contractor?.email || ""}
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                            {roleLabels[roleKey]}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : project.contractor ? (
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-accent/10">
+                      <Avatar className="w-8 h-8 shrink-0">
+                        {project.contractor.avatar_url ? (
+                          <AvatarImage src={project.contractor.avatar_url} />
+                        ) : (
+                          <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                            {project.contractor.name?.[0] || "?"}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-accent truncate">
+                          {project.contractor.name || "Unknown"}
+                        </p>
+                        <p className="text-xs text-accent/50 truncate">
+                          {project.contractor.email || ""}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                        Editor
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             )}
 
             {/* Contractor: Posting Details */}
@@ -706,6 +792,7 @@ function ProjectSection({ projectId }) {
         setIsOpen={setIsUploadOpen}
         projectId={projectId}
         uploaderId={profile?.id}
+        uploaderRole={myProjectRole}
         onVersionCreated={reloadProject}
       />
 

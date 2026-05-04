@@ -9,7 +9,8 @@ export async function fetchContractors() {
       `
       id, name, email, avatar_url,
       stripe_connect_id, created_at,
-      assigned:projects!contractor_id(id, status, created_at, updated_at)
+      assigned:projects!contractor_id(id, status, created_at, updated_at),
+      assignment_entries:project_assignments!contractor_id(project_id, project:projects!project_id(id, status, created_at, updated_at))
     `
     )
     .eq('role', 'contractor')
@@ -18,7 +19,16 @@ export async function fetchContractors() {
   if (error) throw error
 
   return (data || []).map(c => {
-    const projects = c.assigned || []
+    const legacyProjects = c.assigned || []
+    const legacyIds = new Set(legacyProjects.map(p => p.id))
+
+    // Merge in projects from project_assignments not already counted via legacy contractor_id
+    const assignmentProjects = (c.assignment_entries || [])
+      .map(a => a.project)
+      .filter(p => p && !legacyIds.has(p.id))
+
+    const projects = [...legacyProjects, ...assignmentProjects]
+
     const active = projects.filter(p =>
       ['submitted', 'in_progress', 'review', 'revision'].includes(p.status)
     ).length

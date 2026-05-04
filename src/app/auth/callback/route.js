@@ -17,14 +17,28 @@ export async function GET(request) {
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Auto-complete base onboarding steps for contractors on every login
       const userId = sessionData?.user?.id;
       if (userId) {
+        // Ensure a profile row always exists — guards against DB trigger failures
+        await supabase
+          .from("profiles")
+          .upsert(
+            {
+              id: userId,
+              email: sessionData.user.email,
+              name:
+                sessionData.user.user_metadata?.full_name ||
+                sessionData.user.user_metadata?.name ||
+                null,
+            },
+            { onConflict: "id", ignoreDuplicates: true }
+          );
+
         const { data: profile } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", userId)
-          .single();
+          .maybeSingle();
 
         if (profile?.role === "contractor") {
           const now = new Date().toISOString();

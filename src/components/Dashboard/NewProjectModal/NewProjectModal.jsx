@@ -239,6 +239,11 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
                 placeholder="Paste Google Drive, Dropbox, or OneDrive link"
                 {...register("cloudFolderLink", {
                   required: "Cloud folder link is required",
+                  validate: (value) => {
+                    const trimmed = value.trim();
+                    const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+                    try { new URL(url); return true; } catch { return "Please enter a valid URL (e.g. drive.google.com/...)"; }
+                  },
                 })}
                 className="h-12 border-accent/20 text-accent placeholder:text-accent/40 focus:border-primary focus:ring-primary"
               />
