@@ -81,7 +81,7 @@ export async function fetchProjectById(id) {
         author:profiles!author_id(id, name, avatar_url, role)
       ),
       versions:project_versions(
-        id, version_number, video_url, notes, status, created_at,
+        id, version_number, video_url, notes, status, created_at, is_internal,
         uploader:profiles!uploaded_by(id, name, avatar_url)
       )
     `)
@@ -100,7 +100,7 @@ export async function fetchProjectById(id) {
           author:profiles!author_id(id, name, avatar_url, role)
         ),
         versions:project_versions(
-          id, version_number, video_url, notes, status, created_at,
+          id, version_number, video_url, notes, status, created_at, is_internal,
           uploader:profiles!uploaded_by(id, name, avatar_url)
         )
       `)
@@ -110,9 +110,11 @@ export async function fetchProjectById(id) {
     data = { ...data, assignments: [] };
   }
 
-  // Sort versions latest-first so project.versions[0] is always the most recent upload
+  // Sort versions latest-first by upload time (internal versions have null version_number)
   if (data.versions) {
-    data.versions = [...data.versions].sort((a, b) => b.version_number - a.version_number);
+    data.versions = [...data.versions].sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
   }
   return data;
 }
@@ -395,25 +397,29 @@ export async function fetchVersions(projectId) {
   const { data, error } = await supabase
     .from("project_versions")
     .select(`
-      id, version_number, video_url, notes, status, created_at,
+      id, version_number, video_url, notes, status, created_at, is_internal,
       uploader:profiles!uploaded_by(id, name, avatar_url)
     `)
     .eq("project_id", projectId)
-    .order("version_number", { ascending: false });
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   return data;
 }
 
-export async function createVersion(projectId, { video_url, notes, uploaded_by }) {
-  const { data: existing } = await supabase
-    .from("project_versions")
-    .select("version_number")
-    .eq("project_id", projectId)
-    .order("version_number", { ascending: false })
-    .limit(1);
-
-  const nextVersion = existing && existing.length > 0 ? existing[0].version_number + 1 : 1;
+export async function createVersion(projectId, { video_url, notes, uploaded_by, is_internal = false }) {
+  // Only official (finishing_editor) uploads increment version_number
+  let nextVersion = null;
+  if (!is_internal) {
+    const { data: existing } = await supabase
+      .from("project_versions")
+      .select("version_number")
+      .eq("project_id", projectId)
+      .eq("is_internal", false)
+      .order("version_number", { ascending: false })
+      .limit(1);
+    nextVersion = existing && existing.length > 0 ? existing[0].version_number + 1 : 1;
+  }
 
   const { data, error } = await supabase
     .from("project_versions")
@@ -423,9 +429,10 @@ export async function createVersion(projectId, { video_url, notes, uploaded_by }
       video_url,
       notes,
       uploaded_by,
+      is_internal,
     })
     .select(`
-      id, version_number, video_url, notes, status, created_at,
+      id, version_number, video_url, notes, status, created_at, is_internal,
       uploader:profiles!uploaded_by(id, name, avatar_url)
     `)
     .single();

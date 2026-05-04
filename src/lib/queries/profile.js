@@ -16,23 +16,44 @@ export async function fetchProfile() {
   } = await getUser();
   if (authError || !user) throw new Error("Not authenticated");
 
-  // Try the full column list
+  // Try the full column list (maybeSingle = no throw on 0 rows)
   let { data, error } = await supabase
     .from("profiles")
     .select("id, name, email, phone, avatar_url, address, city, created_at, notification_preferences")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  // If notification_preferences column doesn't exist yet, fall back to safe columns
+  // If notification_preferences column doesn't exist, fall back to safe columns
   if (error) {
     const { data: safe, error: safeErr } = await supabase
       .from("profiles")
       .select("id, name, email, phone, avatar_url, address, city, created_at")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
     if (safeErr) throw safeErr;
-    data = { ...safe, notification_preferences: null };
+    data = safe ? { ...safe, notification_preferences: null } : null;
   }
+
+  // Profile row missing (DB trigger didn't fire) — create it now so login succeeds
+  if (!data) {
+    const { data: created, error: createErr } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
+          role: "client",
+        },
+        { onConflict: "id" }
+      )
+      .select("id, name, email, phone, avatar_url, address, city, created_at, notification_preferences")
+      .maybeSingle();
+    if (createErr) throw new Error("Profile not found and could not be created.");
+    data = created;
+  }
+
+  if (!data) throw new Error("Profile not found.");
 
   // Google OAuth stores the profile picture in user_metadata – use as fallback.
   // Also check user.identities for providers that put it there instead.

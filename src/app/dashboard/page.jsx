@@ -15,7 +15,7 @@ export default async function DashboardPage() {
     .from("profiles")
     .select("role")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   const role = profile?.role || "client";
 

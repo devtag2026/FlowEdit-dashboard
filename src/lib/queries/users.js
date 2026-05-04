@@ -131,19 +131,17 @@ export async function checkUserAssociations(userId) {
 export async function updateUserRole(userId, newRole) {
   // Double-check associations before updating
   const { canChange, reasons } = await checkUserAssociations(userId);
-
   if (!canChange) {
     throw new Error(`Cannot change role: ${reasons.join(". ")}.`);
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .update({ role: newRole })
-    .eq("id", userId)
-    .select("id, role");
-
-  if (error) throw error;
-  if (!data || data.length === 0)
-    throw new Error("Failed to update role — user not found or access denied.");
-  return data[0];
+  // Use server API route — direct client-side update is blocked by RLS
+  const res = await fetch("/api/admin/update-role", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, newRole }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Failed to update role.");
+  return result.user;
 }
