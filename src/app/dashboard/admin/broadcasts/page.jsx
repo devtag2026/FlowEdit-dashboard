@@ -102,8 +102,8 @@ export default function BroadcastsPage() {
     const matchesFilter = activeFilter === "All" || activeFilter === b.audience;
     const q = searchQuery.toLowerCase();
     return matchesFilter && (
-      b.title.toLowerCase().includes(q) ||
-      b.content.toLowerCase().includes(q)
+      b.title?.toLowerCase().includes(q) ||
+      b.content?.toLowerCase().includes(q)
     );
   });
 

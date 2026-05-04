@@ -70,8 +70,8 @@ export default function ContractorsPage() {
       (activeFilter === "New" && contractor.status === "New") ||
       (activeFilter === "Inactive" && contractor.status === "Inactive");
     const matchesSearch =
-      contractor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contractor.email.toLowerCase().includes(searchQuery.toLowerCase());
+      contractor.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      contractor.email?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 

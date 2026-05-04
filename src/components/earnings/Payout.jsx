@@ -54,7 +54,7 @@ export default function Payout({ profile }) {
   if (error)   return <div className="py-8 text-center text-red-500 text-sm">{error}</div>;
 
   const { total, paid, pending, count } = earningsSummary(payments);
-  const currency = payments[0]?.currency || "usd";
+  const currency = payments[0]?.currency || "gbp";
   const CurrIcon = getCurrencyIcon(currency);
 
   const stats = [

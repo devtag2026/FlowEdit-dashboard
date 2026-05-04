@@ -34,6 +34,7 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
     formState: { errors },
     setValue,
     reset,
+    watch,
   } = useForm({
     defaultValues: {
       projectTitle: "",
@@ -178,7 +179,7 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
             </FormField>
 
             <FormField label="Platform" required error={errors.platform}>
-              <Select onValueChange={(value) => setValue("platform", value)}>
+              <Select value={watch("platform")} onValueChange={(value) => setValue("platform", value)}>
                 <SelectTrigger className="h-12 bg-white! border-accent/20 text-accent focus:border-primary focus:ring-primary w-full">
                   <SelectValue placeholder="Select Platform" />
                 </SelectTrigger>
@@ -194,7 +195,7 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
             </FormField>
 
             <FormField label="Desired Length" required error={errors.desiredLength}>
-              <Select onValueChange={(value) => setValue("desiredLength", value)}>
+              <Select value={watch("desiredLength")} onValueChange={(value) => setValue("desiredLength", value)}>
                 <SelectTrigger className="h-12 bg-white! border-accent/20 text-accent focus:border-primary focus:ring-primary w-full">
                   <SelectValue placeholder="Select length" />
                 </SelectTrigger>
@@ -210,7 +211,7 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
             </FormField>
 
             <FormField label="Priority">
-              <Select defaultValue="medium" onValueChange={(value) => setValue("priority", value)}>
+              <Select value={watch("priority")} onValueChange={(value) => setValue("priority", value)}>
                 <SelectTrigger className="h-12 bg-white! border-accent/20 text-accent focus:border-primary focus:ring-primary w-full">
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
