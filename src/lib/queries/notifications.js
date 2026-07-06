@@ -154,10 +154,10 @@ export async function createNotification({ userId, title, message, type = "proje
 }
 
 // ─── Create notifications for multiple users ───
-export async function createBulkNotifications(notifications, client = supabase) {
+export async function createBulkNotifications(notifications) {
   if (!notifications?.length) return;
 
-  const { error } = await client
+  const { error } = await supabase
     .from("notifications")
     .insert(notifications);
 

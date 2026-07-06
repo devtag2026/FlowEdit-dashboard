@@ -29,10 +29,10 @@ export async function fetchBroadcasts() {
   return data || []
 }
 
-async function insertRecipientsAndNotify(broadcastId, title, message, audience, client = supabase) {
+async function insertRecipientsAndNotify(broadcastId, title, message, audience) {
   const roleMap = { Contractors: 'contractor', Clients: 'client' }
 
-  let profileQuery = client.from('profiles').select('id, name, role')
+  let profileQuery = supabase.from('profiles').select('id, name, role')
   if (audience !== 'All') {
     profileQuery = profileQuery.eq('role', roleMap[audience] || audience.toLowerCase())
   }
@@ -41,12 +41,12 @@ async function insertRecipientsAndNotify(broadcastId, title, message, audience, 
   if (profileError) throw profileError
   if (!profiles || profiles.length === 0) return
 
-  const { error: recipientError } = await client
+  const { error: recipientError } = await supabase
     .from('broadcast_recipients')
     .insert(profiles.map(p => ({ broadcast_id: broadcastId, profile_id: p.id })))
   if (recipientError) throw recipientError
 
-  const { data: profilesWithPrefs } = await client
+  const { data: profilesWithPrefs } = await supabase
     .from('profiles')
     .select('id, role, notification_preferences')
     .in('id', profiles.map(p => p.id))
@@ -61,8 +61,7 @@ async function insertRecipientsAndNotify(broadcastId, title, message, audience, 
     filtered.map(p => ({
       user_id: p.id, title, message,
       type: 'broadcast', reference_id: broadcastId,
-    })),
-    client
+    }))
   )
 }
 
@@ -92,8 +91,8 @@ export async function createBroadcast({ title, message, audience, scheduledFor }
   return broadcast
 }
 
-export async function sendScheduledBroadcast(broadcastId, { client = supabase } = {}) {
-  const { data: broadcast, error } = await client
+export async function sendScheduledBroadcast(broadcastId) {
+  const { data: broadcast, error } = await supabase
     .from('broadcasts')
     .update({ status: 'sent', scheduled_for: null })
     .eq('id', broadcastId)
@@ -101,7 +100,7 @@ export async function sendScheduledBroadcast(broadcastId, { client = supabase } 
     .single()
   if (error) throw error
 
-  await insertRecipientsAndNotify(broadcastId, broadcast.title, broadcast.message, broadcast.audience || 'All', client)
+  await insertRecipientsAndNotify(broadcastId, broadcast.title, broadcast.message, broadcast.audience || 'All')
   return broadcast
 }
 export async function markBroadcastRead(broadcastId) {
