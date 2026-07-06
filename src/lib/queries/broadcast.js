@@ -29,10 +29,10 @@ export async function fetchBroadcasts() {
   return data || []
 }
 
-async function insertRecipientsAndNotify(broadcastId, title, message, audience) {
+async function insertRecipientsAndNotify(broadcastId, title, message, audience, client = supabase) {
   const roleMap = { Contractors: 'contractor', Clients: 'client' }
 
-  let profileQuery = supabase.from('profiles').select('id, name, role')
+  let profileQuery = client.from('profiles').select('id, name, role')
   if (audience !== 'All') {
     profileQuery = profileQuery.eq('role', roleMap[audience] || audience.toLowerCase())
   }
@@ -41,12 +41,12 @@ async function insertRecipientsAndNotify(broadcastId, title, message, audience) 
   if (profileError) throw profileError
   if (!profiles || profiles.length === 0) return
 
-  const { error: recipientError } = await supabase
+  const { error: recipientError } = await client
     .from('broadcast_recipients')
     .insert(profiles.map(p => ({ broadcast_id: broadcastId, profile_id: p.id })))
   if (recipientError) throw recipientError
 
-  const { data: profilesWithPrefs } = await supabase
+  const { data: profilesWithPrefs } = await client
     .from('profiles')
     .select('id, role, notification_preferences')
     .in('id', profiles.map(p => p.id))
@@ -61,7 +61,8 @@ async function insertRecipientsAndNotify(broadcastId, title, message, audience) 
     filtered.map(p => ({
       user_id: p.id, title, message,
       type: 'broadcast', reference_id: broadcastId,
-    }))
+    })),
+    client
   )
 }
 
@@ -91,8 +92,8 @@ export async function createBroadcast({ title, message, audience, scheduledFor }
   return broadcast
 }
 
-export async function sendScheduledBroadcast(broadcastId) {
-  const { data: broadcast, error } = await supabase
+export async function sendScheduledBroadcast(broadcastId, { client = supabase } = {}) {
+  const { data: broadcast, error } = await client
     .from('broadcasts')
     .update({ status: 'sent', scheduled_for: null })
     .eq('id', broadcastId)
@@ -100,7 +101,7 @@ export async function sendScheduledBroadcast(broadcastId) {
     .single()
   if (error) throw error
 
-  await insertRecipientsAndNotify(broadcastId, broadcast.title, broadcast.message, broadcast.audience || 'All')
+  await insertRecipientsAndNotify(broadcastId, broadcast.title, broadcast.message, broadcast.audience || 'All', client)
   return broadcast
 }
 export async function markBroadcastRead(broadcastId) {
