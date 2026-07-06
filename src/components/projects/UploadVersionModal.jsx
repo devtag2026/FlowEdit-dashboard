@@ -22,7 +22,9 @@ export default function UploadVersionModal({
   uploaderRole,
   onVersionCreated,
 }) {
-  const isInternal = uploaderRole !== "finishing_editor";
+  // Offline/primary editors upload internal drafts; the finishing editor (and legacy
+  // single-contractor projects, where uploaderRole is null) upload the client-visible version.
+  const isInternal = !!uploaderRole && uploaderRole !== "finishing_editor";
   const [file, setFile] = useState(null);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);

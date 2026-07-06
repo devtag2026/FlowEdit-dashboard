@@ -159,7 +159,8 @@ function ProjectSection({ projectId }) {
     if (!profile) return;
     try {
       await approveProject(projectId, profile.id);
-      const latestVer = project.versions?.length > 0 ? project.versions[0] : null;
+      // Latest client-visible (official) version — versions are sorted newest-first.
+      const latestVer = (project.versions || []).find((v) => !v.is_internal) || null;
       if (latestVer) await updateVersionStatus(latestVer.id, "approved");
       const [contractorIds, adminIds] = await Promise.all([
         fetchAllAssignedContractorIds(projectId),
@@ -178,7 +179,8 @@ function ProjectSection({ projectId }) {
     setIsRevising(true);
     try {
       await addComment(projectId, profile.id, `Revision requested: ${revisionReason.trim()}`);
-      const latestVer = project.versions?.length > 0 ? project.versions[0] : null;
+      // Latest client-visible (official) version — versions are sorted newest-first.
+      const latestVer = (project.versions || []).find((v) => !v.is_internal) || null;
       if (latestVer) await updateVersionStatus(latestVer.id, "rejected");
       await updateProjectStatus(projectId, "revision");
       const recipientIds = getAssignedContractorIds();
@@ -259,7 +261,8 @@ function ProjectSection({ projectId }) {
     setIsAdminRevising(true);
     try {
       await addComment(projectId, profile.id, `Admin revision: ${adminRevisionReason.trim()}`);
-      const latestVer = project.versions?.length > 0 ? project.versions[0] : null;
+      // Latest client-visible (official) version — versions are sorted newest-first.
+      const latestVer = (project.versions || []).find((v) => !v.is_internal) || null;
       if (latestVer) await updateVersionStatus(latestVer.id, "rejected");
       await adminSendToRevision(projectId);
       const recipientIds = getAssignedContractorIds();
