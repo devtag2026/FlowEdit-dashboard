@@ -6,7 +6,7 @@ import { sendScheduledBroadcast } from "@/lib/queries/broadcast";
 // but insertRecipientsAndNotify() writes recipients/notifications for other users.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY
+  process.env.SUPABASE_SECRET_KEY,
 );
 
 export async function POST(req) {
@@ -25,17 +25,29 @@ export async function POST(req) {
     if (error) throw error;
 
     const results = await Promise.allSettled(
-      (overdue || []).map((b) => sendScheduledBroadcast(b.id, { client: supabase }))
+      (overdue || []).map((b) =>
+        sendScheduledBroadcast(b.id, { client: supabase }),
+      ),
     );
 
     const sent = results.filter((r) => r.status === "fulfilled").length;
     const failed = results
-      .map((r, i) => (r.status === "rejected" ? { id: overdue[i].id, error: r.reason?.message } : null))
+      .map((r, i) =>
+        r.status === "rejected"
+          ? { id: overdue[i].id, error: r.reason?.message }
+          : null,
+      )
       .filter(Boolean);
 
-    if (failed.length) console.error("[cron/send-scheduled-broadcasts] failures:", failed);
+    if (failed.length)
+      console.error("[cron/send-scheduled-broadcasts] failures:", failed);
 
-    return NextResponse.json({ success: true, checked: overdue?.length || 0, sent, failed });
+    return NextResponse.json({
+      success: true,
+      checked: overdue?.length || 0,
+      sent,
+      failed,
+    });
   } catch (err) {
     console.error("[cron/send-scheduled-broadcasts] error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
