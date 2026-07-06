@@ -45,8 +45,6 @@ export async function fetchAllClients() {
   });
 }
 
-export const fetchMyPayments = fetchAllClients;
-
 export async function fetchClientById(clientId) {
   const { data, error } = await supabase
     .from("profiles")
