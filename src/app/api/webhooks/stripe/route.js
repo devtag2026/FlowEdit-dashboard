@@ -16,12 +16,17 @@ async function syncSubscription({
   customerId,
   status,
   plan,
-  email,
+  email: rawEmail,
   subscriptionId,
   currentPeriodEnd,
   clearPending,
   clearSubscription,
 }) {
+  // Normalize so a Stripe-cased checkout email (e.g. "Adil@x.com") joins the
+  // lowercase email Supabase/Google stores. Without this, the email match and
+  // the later merge-subscription lookup silently miss and the plan is lost.
+  const email = rawEmail ? rawEmail.trim().toLowerCase() : rawEmail;
+
   if (!customerId && !email) return;
 
   const profilePayload = {
