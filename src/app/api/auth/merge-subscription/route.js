@@ -62,6 +62,7 @@ export async function POST(req) {
       subscription_status: pending.subscription_status,
       subscription_plan:   pending.subscription_plan,
       stripe_customer_id:  pending.stripe_customer_id,
+      ...(pending.stripe_subscription_id && { stripe_subscription_id: pending.stripe_subscription_id }),
       ...(pending.name    && { name:    pending.name }),
       ...(pending.address && { address: pending.address }),
       ...(pending.city    && { city:    pending.city }),

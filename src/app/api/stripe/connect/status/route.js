@@ -1,26 +1,27 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
+import { createClient as createAuthClient } from "@/lib/supabase/server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY,
-  
+  process.env.SUPABASE_SECRET_KEY
 );
 
-export async function GET(req) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const profileId = searchParams.get("profileId");
-
-    if (!profileId) return NextResponse.json({ connected: false });
+    const authClient = await createAuthClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ connected: false, error: "Unauthorized" }, { status: 401 });
+    }
 
     const { data: profile } = await supabase
       .from("profiles")
       .select("stripe_connect_id")
-      .eq("id", profileId)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
     if (!profile?.stripe_connect_id) {
       return NextResponse.json({ connected: false });

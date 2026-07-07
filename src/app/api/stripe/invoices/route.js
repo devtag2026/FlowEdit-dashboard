@@ -1,20 +1,33 @@
 import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
+import { createClient as createAuthClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-const stripe = new Stripe(
-  process.env.STRIPE_SECRET_KEY || process.env.NEXT_PUBLIC_STRIPE_SECRET_KEY,
-  { apiVersion: process.env.STRIPE_API_VERSION || "2026-03-25.dahlia" }
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: process.env.STRIPE_API_VERSION || "2026-03-25.dahlia",
+});
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SECRET_KEY
 );
 
-export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const customerId = searchParams.get("customer_id");
+export async function GET() {
+  const authClient = await createAuthClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_customer_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const customerId = profile?.stripe_customer_id;
   if (!customerId) {
-    return NextResponse.json(
-      { message: "customer_id query parameter is required" },
-      { status: 400 }
-    );
+    return NextResponse.json([]);
   }
 
   try {

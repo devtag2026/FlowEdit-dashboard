@@ -6,22 +6,17 @@ import { fetchStripeInvoices } from "@/lib/queries/billing";
 import { useEffect, useState } from "react";
 import Loader from "../common/Loader";
 
-const Invoice = ({ customerId }) => {
+const Invoice = () => {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchInvoices = async () => {
-      if (!customerId) {
-        setError("No billing account found. Complete a checkout to see invoices.");
-        setLoading(false);
-        return;
-      }
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchStripeInvoices(customerId);
+        const data = await fetchStripeInvoices();
         setInvoices(
           Array.isArray(data)
             ? data.map((item) => ({
@@ -49,7 +44,7 @@ const Invoice = ({ customerId }) => {
     };
 
     fetchInvoices();
-  }, [customerId]);
+  }, []);
 
   if (loading) return <Loader />;
 

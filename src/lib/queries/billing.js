@@ -48,17 +48,77 @@ export async function createCheckoutSession(plan, profileId, stripeCustomerId) {
 
   return res.json()
 }
-export async function fetchStripeInvoices(stripeCustomerId) {
-  if (!stripeCustomerId) {
-    throw new Error('Customer ID not available')
-  }
-
-  const response = await fetch(
-    `/api/stripe/invoices?customer_id=${encodeURIComponent(stripeCustomerId)}`
-  )
+export async function fetchStripeInvoices() {
+  const response = await fetch('/api/stripe/invoices')
   if (!response.ok) {
-    const error = await response.json()
+    const error = await response.json().catch(() => ({}))
     throw new Error(error.message || 'Failed to fetch invoices')
   }
   return response.json()
+}
+
+export async function fetchPaymentMethods() {
+  const response = await fetch('/api/stripe/payment-methods')
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || 'Failed to fetch payment methods')
+  }
+  return response.json()
+}
+
+export async function fetchSubscription() {
+  const response = await fetch('/api/stripe/subscription')
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || 'Failed to fetch subscription')
+  }
+  return response.json()
+}
+
+export async function changePlan(plan) {
+  const response = await fetch('/api/stripe/subscription/change-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to change plan')
+  }
+  return data
+}
+
+export async function cancelPendingDowngrade() {
+  const response = await fetch('/api/stripe/subscription/change-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'cancel_pending' }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to cancel pending downgrade')
+  }
+  return data
+}
+
+export async function previewPlanChange(plan) {
+  const response = await fetch('/api/stripe/subscription/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to preview plan change')
+  }
+  return data
+}
+
+export async function createPortalSession() {
+  const response = await fetch('/api/stripe/portal', { method: 'POST' })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to open billing portal')
+  }
+  return data
 }
