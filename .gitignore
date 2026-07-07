@@ -43,3 +43,9 @@ next-env.d.ts
 .claude
 .graphifyignore
 CLAUDE.md
+
+# playwright
+/test-results
+/playwright-report
+/.playwright
+/e2e/screens

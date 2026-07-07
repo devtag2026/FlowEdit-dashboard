@@ -36,10 +36,6 @@
     "jsxRuntime": "reactClassic"
   },
 
-  "typescript": {
-    "enabled": false
-  },
-
   "assist": {
     "actions": {
       "source": {

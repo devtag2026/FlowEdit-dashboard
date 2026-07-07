@@ -59,7 +59,7 @@ export default function ServicePageClient() {
           }
 
           const plan = updated?.subscription_plan?.toLowerCase();
-          if (plan && plan !== "starter") {
+          if (plan && plan !== "launch") {
             clearInterval(intervalId);
             clearQuery();
             return;
@@ -119,10 +119,8 @@ export default function ServicePageClient() {
           buttonClassName="text-accent text-lg font-semibold md:px-6"
         />
 
-        {activeTab === "overview" && <PlanCards profile={profile} />}
-        {activeTab === "invoices" && (
-          <Invoice customerId={profile?.stripe_customer_id} />
-        )}
+        {activeTab === "overview" && <PlanCards profile={profile} onChanged={loadProfile} />}
+        {activeTab === "invoices" && <Invoice />}
         {activeTab === "payment" && <PaymentDetail profile={profile} />}
 
 
