@@ -55,7 +55,11 @@ export async function fetchAllProjects() {
     .select(`
       *,
       client:profiles!client_id(id, name, email, avatar_url),
-      contractor:profiles!contractor_id(id, name, email, avatar_url)
+      contractor:profiles!contractor_id(id, name, email, avatar_url),
+      assignments:project_assignments(
+        id, role, contractor_id,
+        contractor:profiles!contractor_id(id, name, email, avatar_url)
+      )
     `)
     .order("created_at", { ascending: false });
 
@@ -351,6 +355,25 @@ export async function fetchComments(projectId, projectVersionId = null) {
 
   if (error) throw error;
   return data;
+}
+
+// Latest revision reason, surfaced from the comment thread (no dedicated column exists).
+export async function fetchLatestRevisionNote(projectId) {
+  const { data, error } = await supabase
+    .from("project_comments")
+    .select(`
+      id, content, created_at,
+      author:profiles!author_id(id, name, role)
+    `)
+    .eq("project_id", projectId)
+    .or("content.ilike.Revision requested:%,content.ilike.Admin revision:%")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  const row = data?.[0];
+  if (!row) return null;
+  return { ...row, note: row.content.replace(/^(Revision requested|Admin revision):\s*/, "") };
 }
 
 export async function addComment(

@@ -19,6 +19,7 @@ import {
   fetchContractorProjects,
   fetchUserProfile,
 } from "@/lib/queries/projects";
+import { getGreeting } from "@/lib/utils";
 
 const filters = [
   "All",
@@ -71,13 +72,6 @@ function computeStats(projects) {
   ];
 }
 
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good Morning";
-  if (hour < 17) return "Good Afternoon";
-  return "Good Evening";
-}
-
 const ROLE_LABELS = {
   offline_editor: "Offline Editor",
   primary_editor: "Primary Editor",
@@ -110,6 +104,11 @@ const ContractorDashboard = () => {
   const [projects, setProjects] = useState([]);
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [greeting, setGreeting] = useState("Hello");
+
+  useEffect(() => {
+    setGreeting(getGreeting());
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -167,7 +166,7 @@ const ContractorDashboard = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-accent mb-1 sm:mb-2">
-                {getGreeting()}, {profile?.name?.split(" ")[0] || "there"}
+                {greeting}, {profile?.name?.split(" ")[0] || "there"}
               </h1>
               <p className="text-sm sm:text-base text-accent/70 font-onest font-bold">
                 Your assigned projects and deadlines

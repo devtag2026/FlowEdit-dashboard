@@ -10,6 +10,7 @@ import {
   fetchComments,
   fetchUserProfile,
 } from "@/lib/queries/projects";
+import { EDITOR_ROLE_LABELS } from "@/lib/utils";
 
 function timeAgo(dateStr) {
   const now = new Date();
@@ -32,12 +33,6 @@ function formatTimecode(seconds) {
   const remaining = s % 60;
   return `${m}:${String(remaining).padStart(2, "0")}`;
 }
-
-const EDITOR_ROLE_LABELS = {
-  offline_editor:   "Offline Editor",
-  primary_editor:   "Primary Editor",
-  finishing_editor: "Finishing Editor",
-};
 
 export default function ProjectComments({
   projectId,

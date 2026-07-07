@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
-import { ArrowLeft, MoveRight, Check, Upload, Link as LinkIcon, X } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft, MoveRight, Check, Upload, Link as LinkIcon, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,7 @@ import {
   adminSendToRevision,
   fetchAllAssignedContractorIds,
   cleanupOldVersionFiles,
+  fetchLatestRevisionNote,
 } from "@/lib/queries/projects";
 import { notifyProjectEvent, fetchAdminIds } from "@/lib/queries/notifications";
 import Loader from "@/components/common/Loader";
@@ -46,6 +47,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { isValidHttpUrl } from "@/lib/utils";
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
@@ -73,6 +75,8 @@ function ProjectSection({ projectId }) {
   const [isApproveOpen, setIsApproveOpen] = useState(false);
   const [isRevisionOpen, setIsRevisionOpen] = useState(false);
   const [revisionReason, setRevisionReason] = useState("");
+  const [revisionNote, setRevisionNote] = useState(null);
+  const [commentsRefreshKey, setCommentsRefreshKey] = useState(0);
 
   // Contractor actions
   const [submittingForReview, setSubmittingForReview] = useState(false);
@@ -88,6 +92,7 @@ function ProjectSection({ projectId }) {
 
   // Admin actions
   const [publishedUrl, setPublishedUrl] = useState("");
+  const [publishedUrlError, setPublishedUrlError] = useState("");
   const [markingPosted, setMarkingPosted] = useState(false);
   const [adminApproving, setAdminApproving] = useState(false);
   const [isAdminRevisionOpen, setIsAdminRevisionOpen] = useState(false);
@@ -107,6 +112,19 @@ function ProjectSection({ projectId }) {
     setSelectedVersion(visible[0] ?? null);
   }, [project?.versions?.length]);
 
+  const syncRevisionNote = useCallback(async (projectData) => {
+    if (projectData?.status !== "revision") {
+      setRevisionNote(null);
+      return;
+    }
+    try {
+      const note = await fetchLatestRevisionNote(projectId);
+      setRevisionNote(note);
+    } catch (err) {
+      console.error("Failed to fetch revision note:", err);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -117,6 +135,7 @@ function ProjectSection({ projectId }) {
         ]);
         setProject(projectData);
         setProfile(userProfile);
+        await syncRevisionNote(projectData);
 
         // Pre-fill posting details if they exist
         if (projectData) {
@@ -135,12 +154,14 @@ function ProjectSection({ projectId }) {
       }
     }
     loadData();
-  }, [projectId]);
+  }, [projectId, syncRevisionNote]);
 
   const reloadProject = async () => {
     try {
       const projectData = await fetchProjectById(projectId);
       setProject(projectData);
+      await syncRevisionNote(projectData);
+      setCommentsRefreshKey((k) => k + 1);
     } catch (err) {
       console.error("Failed to reload project:", err);
     }
@@ -281,6 +302,11 @@ function ProjectSection({ projectId }) {
 
   const handleMarkPosted = async () => {
     if (!publishedUrl.trim()) return;
+    if (!isValidHttpUrl(publishedUrl)) {
+      setPublishedUrlError("Enter a valid URL starting with https:// or http://");
+      return;
+    }
+    setPublishedUrlError("");
     setMarkingPosted(true);
     try {
       const [updated, contractorIds] = await Promise.all([
@@ -420,18 +446,18 @@ function ProjectSection({ projectId }) {
                   {role === "client" && (
                     <>
                       {isApproved || isPosted ? (
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex items-center gap-2 text-[#22C55E] font-bold text-sm md:text-xl">
-                            <Check className="w-5 h-5" /> Approved
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className="flex items-center gap-1.5 text-[#22C55E] font-bold text-sm md:text-base">
+                            <Check className="w-4 h-4 md:w-5 md:h-5" /> Approved
                           </div>
                           {project.asset_links?.[0] && (
                             <a
                               href={project.asset_links[0]}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary font-bold text-xs md:text-sm hover:underline"
+                              className="flex items-center gap-1.5 text-primary font-semibold text-sm md:text-base hover:underline"
                             >
-                              Open Cloud Folder →
+                              <LinkIcon className="w-4 h-4 md:w-5 md:h-5" /> Open Cloud Folder
                             </a>
                           )}
                         </div>
@@ -561,6 +587,7 @@ function ProjectSection({ projectId }) {
             {showVersions && visibleVersions.length > 0 && (
               <VersionHistory
                 versions={visibleVersions}
+                assignments={project.assignments}
                 selectedVersionId={selectedVersion?.id}
                 showInternal={role !== "client"}
                 onSelectVersion={(v) => {
@@ -693,10 +720,16 @@ function ProjectSection({ projectId }) {
                   <Input
                     placeholder="Paste the live post URL..."
                     value={publishedUrl}
-                    onChange={(e) => setPublishedUrl(e.target.value)}
+                    onChange={(e) => {
+                      setPublishedUrl(e.target.value);
+                      if (publishedUrlError) setPublishedUrlError("");
+                    }}
                     className="pl-10 bg-white border-accent/20 text-accent placeholder:text-accent/40"
                   />
                 </div>
+                {publishedUrlError && (
+                  <p className="text-xs text-red-500">{publishedUrlError}</p>
+                )}
               </div>
             )}
 
@@ -749,6 +782,25 @@ function ProjectSection({ projectId }) {
               </div>
             )}
 
+            {/* Revision Notes (shown while a revision is in progress) */}
+            {project.status === "revision" && (
+              <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                <div className="flex items-center gap-2 text-amber-700 font-bold text-sm mb-1">
+                  <RotateCcw className="w-4 h-4" /> Revision Requested
+                </div>
+                {revisionNote ? (
+                  <>
+                    <p className="text-sm text-accent mt-1 whitespace-pre-wrap">{revisionNote.note}</p>
+                    <p className="text-xs text-amber-600 mt-1">
+                      — {revisionNote.author?.name || "Unknown"}, {formatDate(revisionNote.created_at)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-accent/50 mt-1">No revision note found.</p>
+                )}
+              </div>
+            )}
+
             {/* Description */}
             <div className="text-sm md:text-base bg-tertiary/60 shadow-lg rounded-xl p-4 border border-accent/20">
               <p className="leading-relaxed">{project.description || "No description provided."}</p>
@@ -772,6 +824,7 @@ function ProjectSection({ projectId }) {
           </div>
 
           <ProjectComments
+            key={commentsRefreshKey}
             projectId={projectId}
             project={project}
             videoRef={videoRef}
