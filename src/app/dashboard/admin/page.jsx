@@ -31,6 +31,7 @@ import {
   markPosted,
 } from "@/lib/queries/projects";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { EDITOR_ROLE_LABELS, getGreeting } from "@/lib/utils";
 import AssignContractorModal from "@/components/Dashboard/AssignContractorModal";
 import MarkPostedModal from "@/components/Dashboard/MarkPostedModal";
 import { notifyProjectEvent } from "@/lib/queries/notifications";
@@ -103,6 +104,17 @@ function formatDate(dateStr) {
   });
 }
 
+// All assigned editors for a project, deduped, falling back to the legacy single contractor.
+function getProjectEditors(project) {
+  if (project.assignments?.length > 0) {
+    const seen = new Set();
+    return project.assignments
+      .filter((a) => a.contractor && !seen.has(a.contractor.id) && seen.add(a.contractor.id))
+      .map((a) => ({ ...a.contractor, role: a.role }));
+  }
+  return project.contractor ? [{ ...project.contractor, role: null }] : [];
+}
+
 const AdminDashboard = () => {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("All");
@@ -112,6 +124,11 @@ const AdminDashboard = () => {
   const [contractors, setContractors] = useState([]);
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [greeting, setGreeting] = useState("Hello");
+
+  useEffect(() => {
+    setGreeting(getGreeting());
+  }, []);
 
   // Assign contractor modal
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -234,7 +251,7 @@ const AdminDashboard = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-accent mb-1 sm:mb-2">
-                Admin Dashboard
+                {greeting}, {profile?.name?.split(" ")[0] || "there"}
               </h1>
               <p className="text-sm sm:text-base text-accent/70 font-onest font-bold">
                 Manage all projects, assign editors, and track progress
@@ -368,20 +385,29 @@ const AdminDashboard = () => {
                       </td>
 
                       <td className="p-4">
-                        {project.contractor ? (
-                          <div className="flex items-center gap-2">
-                            <Avatar className="w-7 h-7">
-                              {project.contractor.avatar_url ? (
-                                <AvatarImage src={project.contractor.avatar_url} />
-                              ) : (
-                                <AvatarFallback className="bg-green-100 text-green-700 text-xs font-bold">
-                                  {project.contractor.name?.[0] || "?"}
-                                </AvatarFallback>
-                              )}
-                            </Avatar>
-                            <span className="text-sm text-accent/80">
-                              {project.contractor.name}
-                            </span>
+                        {getProjectEditors(project).length > 0 ? (
+                          <div className="flex flex-col gap-1.5">
+                            {getProjectEditors(project).map((editor) => (
+                              <div key={editor.id} className="flex items-center gap-2">
+                                <Avatar className="w-7 h-7">
+                                  {editor.avatar_url ? (
+                                    <AvatarImage src={editor.avatar_url} />
+                                  ) : (
+                                    <AvatarFallback className="bg-green-100 text-green-700 text-xs font-bold">
+                                      {editor.name?.[0] || "?"}
+                                    </AvatarFallback>
+                                  )}
+                                </Avatar>
+                                <span className="text-sm text-accent/80">
+                                  {editor.name}
+                                </span>
+                                {editor.role && (
+                                  <span className="text-[10px] text-accent/40 uppercase">
+                                    {EDITOR_ROLE_LABELS[editor.role] ?? editor.role}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <span className="text-sm text-accent/40 italic">Unassigned</span>
@@ -441,18 +467,27 @@ const AdminDashboard = () => {
                     <span>{formatDate(project.updated_at)}</span>
                   </div>
 
-                  {project.contractor ? (
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-6 h-6">
-                        {project.contractor.avatar_url ? (
-                          <AvatarImage src={project.contractor.avatar_url} />
-                        ) : (
-                          <AvatarFallback className="bg-green-100 text-green-700 text-[10px] font-bold">
-                            {project.contractor.name?.[0] || "?"}
-                          </AvatarFallback>
-                        )}
-                      </Avatar>
-                      <span className="text-xs text-accent/70">{project.contractor.name}</span>
+                  {getProjectEditors(project).length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                      {getProjectEditors(project).map((editor) => (
+                        <div key={editor.id} className="flex items-center gap-2">
+                          <Avatar className="w-6 h-6">
+                            {editor.avatar_url ? (
+                              <AvatarImage src={editor.avatar_url} />
+                            ) : (
+                              <AvatarFallback className="bg-green-100 text-green-700 text-[10px] font-bold">
+                                {editor.name?.[0] || "?"}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <span className="text-xs text-accent/70">{editor.name}</span>
+                          {editor.role && (
+                            <span className="text-[10px] text-accent/40 uppercase">
+                              {EDITOR_ROLE_LABELS[editor.role] ?? editor.role}
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <p className="text-xs text-accent/40 italic">Unassigned</p>

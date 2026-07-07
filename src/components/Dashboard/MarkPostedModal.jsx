@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { X, Loader2, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isValidHttpUrl } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -20,9 +21,15 @@ export default function MarkPostedModal({
 }) {
   const [publishedUrl, setPublishedUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [urlError, setUrlError] = useState("");
 
   const handleSubmit = async () => {
     if (!project || !publishedUrl.trim()) return;
+    if (!isValidHttpUrl(publishedUrl)) {
+      setUrlError("Enter a valid URL starting with https:// or http://");
+      return;
+    }
+    setUrlError("");
     setIsSubmitting(true);
     try {
       await onMarkPosted(project.id, publishedUrl.trim());
@@ -58,15 +65,23 @@ export default function MarkPostedModal({
         </DialogHeader>
 
         <div className="px-6 pb-6 space-y-4">
-          <div className="relative">
-            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/40" />
-            <Input
-              placeholder="https://instagram.com/p/..."
-              value={publishedUrl}
-              onChange={(e) => setPublishedUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="pl-10 h-12 border-accent/20 text-accent placeholder:text-accent/40 focus:border-primary focus:ring-primary"
-            />
+          <div>
+            <div className="relative">
+              <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent/40" />
+              <Input
+                placeholder="https://instagram.com/p/..."
+                value={publishedUrl}
+                onChange={(e) => {
+                  setPublishedUrl(e.target.value);
+                  if (urlError) setUrlError("");
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                className="pl-10 h-12 border-accent/20 text-accent placeholder:text-accent/40 focus:border-primary focus:ring-primary"
+              />
+            </div>
+            {urlError && (
+              <p className="text-xs text-red-500 mt-1.5">{urlError}</p>
+            )}
           </div>
 
           <Button

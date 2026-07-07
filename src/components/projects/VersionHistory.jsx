@@ -1,6 +1,7 @@
 "use client";
 import { ExternalLink } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { EDITOR_ROLE_LABELS } from "@/lib/utils";
 
 function timeAgo(dateStr) {
   const now = new Date();
@@ -23,7 +24,7 @@ const statusColors = {
   rejected: "bg-red-100 text-red-700",
 };
 
-export default function VersionHistory({ versions, selectedVersionId, onSelectVersion, showInternal = false }) {
+export default function VersionHistory({ versions, assignments, selectedVersionId, onSelectVersion, showInternal = false }) {
   if (!versions || versions.length === 0) return null;
 
   return (
@@ -102,6 +103,16 @@ export default function VersionHistory({ versions, selectedVersionId, onSelectVe
                     <span className="text-[11px] text-accent/50">
                       {version.uploader.name}
                     </span>
+                    {(() => {
+                      const uploaderRole = assignments?.find(
+                        (a) => a.contractor_id === version.uploader.id
+                      )?.role;
+                      return uploaderRole ? (
+                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                          {EDITOR_ROLE_LABELS[uploaderRole] ?? uploaderRole}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 )}
               </div>
