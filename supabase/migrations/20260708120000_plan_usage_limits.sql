@@ -32,11 +32,20 @@ begin
   from public.profiles
   where id = new.client_id;
 
+  -- Only the three paid tiers are capped here; a client with no active plan
+  -- ('launch'/null) is already blocked from submitting projects client-side
+  -- (subscription_status === "active" check) — this trigger doesn't need to
+  -- duplicate that, and must not reject fixtures/flows that predate billing.
+  if v_plan is distinct from 'starter'
+     and v_plan is distinct from 'pro'
+     and v_plan is distinct from 'agency' then
+    return new;
+  end if;
+
   v_limit := case v_plan
     when 'starter' then 2
     when 'pro' then 8
     when 'agency' then 20
-    else 0
   end;
 
   v_window_start := coalesce(
