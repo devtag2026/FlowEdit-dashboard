@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormSection, FormField } from "./FormSection";
-import { createProject, fetchUserProfile } from "@/lib/queries/projects";
+import { createProject, fetchUserProfile, fetchVideoUsage } from "@/lib/queries/projects";
 import { hasBranding } from "@/lib/queries/branding";
 import { notifyProjectEvent, fetchAdminIds } from "@/lib/queries/notifications";
 import Link from "next/link";
@@ -53,6 +53,7 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
   const [brandingExists, setBrandingExists] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [videoUsage, setVideoUsage] = useState(null);
 
   useEffect(() => {
     if (clientId) {
@@ -60,8 +61,22 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
     }
   }, [clientId]);
 
+  useEffect(() => {
+    if (isOpen && clientId) {
+      fetchVideoUsage(clientId).then(setVideoUsage).catch(() => setVideoUsage(null));
+    }
+  }, [isOpen, clientId]);
+
+  const limitReached = videoUsage != null && videoUsage.remaining <= 0;
+
   const onSubmit = async (data) => {
     if (!clientId) return;
+    if (limitReached) {
+      setSubmitError(
+        `You've used all ${videoUsage.limit} videos for this billing period — upgrade to create more.`
+      );
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -102,7 +117,13 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
       onProjectCreated?.();
     } catch (err) {
       console.error("Failed to create project:", err);
-      setSubmitError(err.message || "Failed to create project. Please try again.");
+      if (err.code === "video_limit_reached") {
+        setSubmitError(
+          `You've used all ${videoUsage?.limit ?? ""} videos for this billing period — upgrade to create more.`
+        );
+      } else {
+        setSubmitError(err.message || "Failed to create project. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -317,7 +338,11 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
           {/* ─── Footer ─── */}
           <div className="flex flex-col gap-4 pt-6 border-t border-accent/10 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-accent/60 font-onest">
-              You will receive a confirmation once your project is added to your dashboard
+              {videoUsage
+                ? limitReached
+                  ? `You've used all ${videoUsage.limit} videos for this billing period — upgrade to create more.`
+                  : `${videoUsage.remaining} of ${videoUsage.limit} videos left this billing period`
+                : "You will receive a confirmation once your project is added to your dashboard"}
             </p>
 
             <div className="flex items-center gap-4 shrink-0">
@@ -333,7 +358,7 @@ export default function NewProjectRequestModal({ isOpen, setIsOpen, clientId, on
               <Button
                 type="button"
                 onClick={handleSubmit(onSubmit)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || limitReached}
                 className="bg-primary text-white font-onest font-semibold hover:bg-primary/90 px-8 h-11 disabled:opacity-50"
               >
                 {isSubmitting ? (

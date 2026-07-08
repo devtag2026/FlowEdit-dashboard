@@ -1,5 +1,6 @@
 
 import { getSupabaseClient } from "../supabase/client";
+import { limitsForPlan } from "../stripe/plans";
 const supabase = getSupabaseClient()
 // ─── CLIENT: Fetch own projects ───
 export async function fetchClientProjects(userId) {
@@ -123,6 +124,59 @@ export async function fetchProjectById(id) {
   return data;
 }
 
+// Window start for the "videos per billing period" count — mirrors the
+// coalesce fallback in the enforce_video_limit DB trigger so client-side
+// previews and the DB backstop agree even before current_period_start is
+// populated by the Stripe webhook.
+function videoUsageWindowStart({ current_period_start, current_period_end }) {
+  if (current_period_start) return new Date(current_period_start);
+  if (current_period_end) {
+    const end = new Date(current_period_end);
+    return new Date(end.setMonth(end.getMonth() - 1));
+  }
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+// ─── CLIENT: How many videos used / remaining this billing period ───
+export async function fetchVideoUsage(clientId) {
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("subscription_plan, current_period_start, current_period_end")
+    .eq("id", clientId)
+    .single();
+  if (profileError) throw profileError;
+
+  const plan = profile.subscription_plan || "launch";
+  const { videosPerPeriod: limit } = limitsForPlan(plan);
+  const windowStart = videoUsageWindowStart(profile);
+
+  const { count, error } = await supabase
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .gte("created_at", windowStart.toISOString());
+  if (error) throw error;
+
+  const used = count ?? 0;
+  return { plan, used, limit, remaining: Math.max(limit - used, 0) };
+}
+
+// ─── Count client-initiated revision rounds already used on a project ───
+// Mirrors the "Revision requested:" prefix convention used by
+// fetchLatestRevisionNote / the enforce_revision_limit DB trigger. Excludes
+// admin-initiated "Admin revision:" comments, which don't count against the
+// client's limit.
+export async function countClientRevisions(projectId) {
+  const { count, error } = await supabase
+    .from("project_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .ilike("content", "Revision requested:%");
+  if (error) throw error;
+  return count ?? 0;
+}
+
 // ─── CLIENT: Create new project ───
 export async function createProject({
   title,
@@ -155,7 +209,14 @@ export async function createProject({
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("video_limit_reached")) {
+      const limitError = new Error("video_limit_reached");
+      limitError.code = "video_limit_reached";
+      throw limitError;
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -398,7 +459,14 @@ export async function addComment(
     `)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("revision_limit_reached")) {
+      const limitError = new Error("revision_limit_reached");
+      limitError.code = "revision_limit_reached";
+      throw limitError;
+    }
+    throw error;
+  }
   return data;
 }
 

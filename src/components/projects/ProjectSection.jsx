@@ -32,7 +32,9 @@ import {
   fetchAllAssignedContractorIds,
   cleanupOldVersionFiles,
   fetchLatestRevisionNote,
+  countClientRevisions,
 } from "@/lib/queries/projects";
+import { limitsForPlan } from "@/lib/stripe/plans";
 import { notifyProjectEvent, fetchAdminIds } from "@/lib/queries/notifications";
 import Loader from "@/components/common/Loader";
 import ProjectComments from "./ProjectComments";
@@ -77,6 +79,8 @@ function ProjectSection({ projectId }) {
   const [revisionReason, setRevisionReason] = useState("");
   const [revisionNote, setRevisionNote] = useState(null);
   const [commentsRefreshKey, setCommentsRefreshKey] = useState(0);
+  const [revisionsUsed, setRevisionsUsed] = useState(0);
+  const [revisionError, setRevisionError] = useState(null);
 
   // Contractor actions
   const [submittingForReview, setSubmittingForReview] = useState(false);
@@ -136,6 +140,9 @@ function ProjectSection({ projectId }) {
         setProject(projectData);
         setProfile(userProfile);
         await syncRevisionNote(projectData);
+        if (role === "client") {
+          countClientRevisions(projectId).then(setRevisionsUsed).catch(() => setRevisionsUsed(0));
+        }
 
         // Pre-fill posting details if they exist
         if (projectData) {
@@ -154,18 +161,24 @@ function ProjectSection({ projectId }) {
       }
     }
     loadData();
-  }, [projectId, syncRevisionNote]);
+  }, [projectId, syncRevisionNote, role]);
 
   const reloadProject = async () => {
     try {
       const projectData = await fetchProjectById(projectId);
       setProject(projectData);
       await syncRevisionNote(projectData);
+      if (role === "client") {
+        countClientRevisions(projectId).then(setRevisionsUsed).catch(() => {});
+      }
       setCommentsRefreshKey((k) => k + 1);
     } catch (err) {
       console.error("Failed to reload project:", err);
     }
   };
+
+  const revisionLimit = limitsForPlan(profile?.subscription_plan).revisionsPerVideo;
+  const revisionLimitReached = revisionLimit != null && revisionsUsed >= revisionLimit;
 
   // Returns all contractor IDs assigned to this project (new roles table + legacy field)
   function getAssignedContractorIds() {
@@ -197,7 +210,12 @@ function ProjectSection({ projectId }) {
 
   const handleRevise = async () => {
     if (!revisionReason.trim() || !profile) return;
+    if (revisionLimitReached) {
+      setRevisionError("Revision limit reached — upgrade for unlimited revisions.");
+      return;
+    }
     setIsRevising(true);
+    setRevisionError(null);
     try {
       await addComment(projectId, profile.id, `Revision requested: ${revisionReason.trim()}`);
       // Latest client-visible (official) version — versions are sorted newest-first.
@@ -211,6 +229,12 @@ function ProjectSection({ projectId }) {
       await reloadProject();
     } catch (err) {
       console.error("Failed to request revision:", err);
+      if (err.code === "revision_limit_reached") {
+        setRevisionError("Revision limit reached — upgrade for unlimited revisions.");
+        setRevisionsUsed(revisionLimit ?? revisionsUsed);
+      } else {
+        setRevisionError(err.message || "Failed to request revision. Please try again.");
+      }
     } finally {
       setIsRevising(false);
     }
@@ -463,14 +487,26 @@ function ProjectSection({ projectId }) {
                         </div>
                       ) : project.status === "review" ? (
                         <>
-                          <Button
-                            variant="ghost"
-                            size="lg"
-                            className="border border-primary text-primary md:rounded-xl md:px-5 md:py-6 text-xs md:text-base cursor-pointer"
-                            onClick={() => setIsRevisionOpen(true)}
-                          >
-                            Request Revision
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button
+                                  variant="ghost"
+                                  size="lg"
+                                  disabled={revisionLimitReached}
+                                  className="border border-primary text-primary md:rounded-xl md:px-5 md:py-6 text-xs md:text-base cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={() => setIsRevisionOpen(true)}
+                                >
+                                  Request Revision
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {revisionLimitReached && (
+                              <TooltipContent side="top" className="max-w-xs text-xs">
+                                Revision limit reached — upgrade for unlimited revisions.
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
 
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -924,10 +960,13 @@ function ProjectSection({ projectId }) {
               onChange={(e) => setRevisionReason(e.target.value)}
               className="bg-white border-accent/20 text-accent placeholder:text-accent/40 resize-none min-h-[100px]"
             />
+            {revisionError && (
+              <p className="text-sm text-danger">{revisionError}</p>
+            )}
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => { setIsRevisionOpen(false); setRevisionReason(""); }}
+                onClick={() => { setIsRevisionOpen(false); setRevisionReason(""); setRevisionError(null); }}
                 disabled={isRevising}
                 className="flex-1 rounded-xl py-5 text-sm font-semibold border-primary text-primary hover:bg-primary hover:text-white cursor-pointer transition-colors"
               >
@@ -935,7 +974,7 @@ function ProjectSection({ projectId }) {
               </Button>
               <Button
                 onClick={handleRevise}
-                disabled={!revisionReason.trim() || isRevising}
+                disabled={!revisionReason.trim() || isRevising || revisionLimitReached}
                 className="flex-1 rounded-xl py-5 text-sm font-semibold bg-primary text-white hover:bg-primary/90 cursor-pointer disabled:opacity-50"
               >
                 {isRevising ? "Submitting..." : "Submit Revision Request"}

@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { planForPrice, periodEndOf } from "@/lib/stripe/plans";
+import { planForPrice, periodEndOf, periodStartOf } from "@/lib/stripe/plans";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: process.env.STRIPE_API_VERSION || "2026-03-25.dahlia",
@@ -19,6 +19,7 @@ async function syncSubscription({
   email: rawEmail,
   subscriptionId,
   currentPeriodEnd,
+  currentPeriodStart,
   clearPending,
   clearSubscription,
 }) {
@@ -37,8 +38,15 @@ async function syncSubscription({
     ...(currentPeriodEnd && {
       current_period_end: new Date(currentPeriodEnd * 1000).toISOString(),
     }),
+    ...(currentPeriodStart && {
+      current_period_start: new Date(currentPeriodStart * 1000).toISOString(),
+    }),
     ...(clearPending     && { pending_plan: null, stripe_schedule_id: null }),
-    ...(clearSubscription && { stripe_subscription_id: null, current_period_end: null }),
+    ...(clearSubscription && {
+      stripe_subscription_id: null,
+      current_period_end: null,
+      current_period_start: null,
+    }),
   };
 
   let updated = false;
@@ -113,6 +121,7 @@ export async function POST(req) {
         let resolvedPlan = plan;
         let subscriptionId = null;
         let currentPeriodEnd = null;
+        let currentPeriodStart = null;
         if (obj.subscription) {
           try {
             const sub = await stripe.subscriptions.retrieve(obj.subscription);
@@ -120,6 +129,7 @@ export async function POST(req) {
             if (priceId) resolvedPlan = planForPrice(priceId);
             subscriptionId = sub.id;
             currentPeriodEnd = periodEndOf(sub);
+            currentPeriodStart = periodStartOf(sub);
           } catch {}
         }
 
@@ -130,6 +140,7 @@ export async function POST(req) {
           email,
           subscriptionId,
           currentPeriodEnd,
+          currentPeriodStart,
         });
         break;
       }
@@ -143,6 +154,7 @@ export async function POST(req) {
           plan,
           subscriptionId: obj.id,
           currentPeriodEnd: periodEndOf(obj),
+          currentPeriodStart: periodStartOf(obj),
           clearPending: !obj.schedule,
         });
         break;
